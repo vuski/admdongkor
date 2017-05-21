@@ -65,7 +65,7 @@
 
 
 
-## mapshaper
+## 참고 : mapshaper
 - mapshaper.org 에서 여러 가지 작업을 할 수 있습니다. 자세한 것은 다음의 링크를 참고하세요
   - https://github.com/mbloch/mapshaper/wiki
 - 맵셰이퍼에서 가능한 작업들
