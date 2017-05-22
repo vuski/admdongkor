@@ -73,8 +73,8 @@
 
 ## 참고 : 선거 및 지도 관련 데이터
 - 과거 선거 관련 데이터는 중앙선거관리위원회에서 찾을 수 있습니다.
-- [ChangHee Lee 님의 repository](https://github.com/OhmyNews/2017-Election)에 몇몇 과거 선거 데이터들과 관련 자료들이 정리되어 있습니다.
-- [오마이뉴스 repository](https://github.com/WWolf/korea-election)에도 2017년 대선 데이터과 분석 자료들이 올라와 있습니다.
+- [ChangHee Lee 님의 repository](https://github.com/WWolf/korea-election)에 몇몇 과거 선거 데이터들과 관련 자료들이 정리되어 있습니다.
+- [오마이뉴스 repository](https://github.com/OhmyNews/2017-Election)에도 2017년 대선 데이터과 분석 자료들이 올라와 있습니다.
 - [southkorea 계정의 repository](https://github.com/southkorea/southkorea-maps)에는 2011년~2013년 지도 데이터들이 다양한 포맷으로 올라와 있습니다.
 
 
