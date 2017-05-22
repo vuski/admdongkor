@@ -72,7 +72,8 @@
 - 통계청마이크로데이터서비스의 인구이동 데이터는 10자리 코드와 매칭됩니다. 단, 행정동 이외에도 출장소에 신고된 전입전출 데이터도 있으니 유의하시기 바랍니다.
 
 ## 참고 : 선거 및 지도 관련 데이터
-- 과거 선거 관련 데이터는 중앙선거관리위원회에서 찾을 수 있습니다.
+- 과거 선거 관련 데이터 원본은 [중앙선거관리위원회](http://nec.go.kr/portal/bbs/list/B0000341.do?menuNo=200029)에서 찾을 수 있습니다.
+- [2017년 대선 시군구별 득표 지도](https://bl.ocks.org/vuski/raw/e29ed35cfdfb21ae01689c76f4aeea87/) 와 [2017년 대선 읍면동별 득표 지도](https://bl.ocks.org/vuski/raw/7e482f13ef2b2ec4c14bb3622f05c353/) 를 인터랙티브 버젼으로 볼 수 있습니다. 지역별 1~5위 득표지도, 후보별 득표지도, 2016년 총선과의 비교지도가 있고 총 14장입니다. 개략적 지도의 모습과 설명은 [여기](http://www.vw-lab.com/39)에서 확인할 수 있습니다. 시군구별 득표지도는 모바일 화면에 최적화 되어 있고, 읍면동별 득표지도는 pc 화면 비율(가로로 긴 화면)에 최적화 되어 있습니다. 읍면동 득표지도는 모바일에서 느려질 수 있습니다. 
 - [ChangHee Lee 님의 repository](https://github.com/WWolf/korea-election)에 몇몇 과거 선거 데이터들과 관련 자료들이 정리되어 있습니다.
 - [오마이뉴스 repository](https://github.com/OhmyNews/2017-Election)에도 2017년 대선 데이터과 분석 자료들이 올라와 있습니다.
 - [southkorea 계정의 repository](https://github.com/southkorea/southkorea-maps)에는 2011년~2013년 지도 데이터들이 다양한 포맷으로 올라와 있습니다.
