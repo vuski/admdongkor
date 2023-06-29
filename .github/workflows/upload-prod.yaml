@@ -1,25 +1,31 @@
 name: Upload adm hcode and multi_polygons
 
 on:
-  push:
-    tags:
-      - 'v*.*.*.*'
+  release:
+    types:
+      - created
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
 
-    - name: Install dependencies
-      run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-    - name: Run script
-      run: python script.py
+      - name: Run script
+        env:
+          BUCKET_NAME: geo-data.everybike.net
+          VERSION: ${{ github.event.release.tag_name }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFUALT_REGION: ap-northeast-2
+        run: python script.py -v ${VERSION} -b ${BUCKET_NAME}
