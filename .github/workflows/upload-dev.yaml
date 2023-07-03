@@ -23,8 +23,20 @@ jobs:
 
       - name: Run script
         env:
-          BUCKET_NAME: dev-geo-data.everybike.io
+          BUCKET_NAME: geo-data.everybike.io
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFUALT_REGION: ap-northeast-2
+          API_URL: https://dev-api.everybike.io/servers/v1/adm_versions
+          API_KEY: ${{ secrets.DEV_API_KEY }}
         run: python script.py -b ${BUCKET_NAME}
+    - name: Slack Notify
+      uses: 8398a7/action-slack@v3
+      with:
+        author_name: ${{ github.actor }}
+        status: ${{ job.status }}
+        fields: all # selectable (default: repo,message)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+      if: always()

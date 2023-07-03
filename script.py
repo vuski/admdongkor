@@ -7,6 +7,7 @@ import boto3
 from datetime import datetime
 from io import StringIO
 import argparse
+import requests
 
 def tsv_to_json(tsv_file):
     with open(tsv_file, 'r', encoding='utf-8') as tsvfile:
@@ -19,7 +20,7 @@ def tsv_to_json(tsv_file):
 
 def upload_to_s3(json_data, bucket_name, key_name):
     s3 = boto3.client('s3')
-    if type(json_data) == 'list':
+    if isinstance(json_data, list):
         json_str = json.dumps(json_data, ensure_ascii=False)
     else:
         json_str = json_data
@@ -39,10 +40,8 @@ def upload_adm_code(version, bucket):
     json_data = tsv_to_json(file)
     json_data = list(map(lambda d: {'code': d['ADMCD'], 'name': d['ADMNM']}, json_data))
     key_name = f"adm/adm_codes_{version}.json"
-    # res = {'version': version, 'bucket': bucket, 'key_name': key_name}
     res = upload_to_s3(json_data, bucket_name=bucket, key_name=key_name)
     print("result: ", res)
-
 
 def get_latest_geojson_file():
     geojson_files = glob.glob(os.path.join('.', '**/*.geojson'), recursive=True)
@@ -59,11 +58,23 @@ def upload_adm_geojson(version, bucket):
         json_data = f.read()
         upload_to_s3(json_data, bucket_name=bucket, key_name=key_name)
 
+def update_latest_version(version):
+    api_url = os.environ.get('API_URL')
+    api_key = os.environ.get('API_KEY')
+    print(f"url={api_url} key={api_key}")
+    if api_url and api_key:
+        resp = requests.post(api_url, headers={'X-API-KEY': api_key}, data={'version': version})
+        print(resp.text)
+        resp.raise_for_status()
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--version', default=datetime.today().strftime("%Y.%m.%d.%H%M%S"))
+    parser.add_argument('-v', '--version', default=f"dev{datetime.today().strftime('%Y.%m.%d.%H%M%S')}")
     parser.add_argument('-b', '--bucket', default="dev-geo-data.everybike.io")
     args = vars(parser.parse_args())
     print(args)
-    # upload_adm_code(version=args['version'], bucket=args['bucket'])
-    upload_adm_geojson(version=args['version'], bucket=args['bucket'])
+    version = args['version']
+    bucket = args['bucket']
+    upload_adm_code(version=version, bucket=bucket)
+    upload_adm_geojson(version=version, bucket=bucket)
+    update_latest_version(version=version)
