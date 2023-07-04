@@ -1,0 +1,6 @@
+# define ENV_VAR
+# export API_URL=http://localhost:3000/server/v1/adm_versions
+# export API_KEY=xxxxxxx
+# ServerApiKey.create(key: :adm_version, target: :api, name: '행정구역 저장키', scopes: ['all'])
+export API_URL='http://localhost:3000/servers/v1/adm_versions'
+export API_KEY='adm_version'
