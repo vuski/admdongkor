@@ -1,0 +1,15 @@
+.claude/*
+CLAUDE.md
+.venv/*
+
+# PyPI 업로드 전 로컬 검증용 노트북 (git 에는 생성 스크립트만 올림)
+lib/tests/local_test.ipynb
+
+# Python 빌드 산출물
+lib/dist/
+lib/build/
+lib/src/admdongkor.egg-info/
+lib/src/*.egg-info/
+**/__pycache__/
+*.pyc
+.pytest_cache/
