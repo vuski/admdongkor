@@ -68,6 +68,17 @@ sido = adk.get("20250401", "sido")   # 시도
 | `sggcd` | 상위 시군구 코드 (emd 한정) |
 | `sidocd` | 상위 시도 코드 (sgg/emd 한정) |
 
+**체이닝 메서드** — `find()` 의 반환은 `pd.DataFrame` 서브클래스라 pandas 기능은
+그대로 쓰면서 자주 쓰는 버전 키 추출을 한 줄로:
+
+```python
+adk.find("여주군").versions()   # ['19751231', ..., '20121231']  (중복제거, 정렬된 순서)
+adk.find("여주군").first()      # '19751231'   — 가장 이른 버전
+adk.find("여주군").last()       # '20121231'   — 가장 늦은 버전 (2013 여주시로 승격)
+```
+
+매치가 없으면 `.first()` / `.last()` 는 `None`.
+
 ### `get(key, level="emd", *, force_refresh=False) -> GeoDataFrame`
 
 특정 버전의 지도를 `GeoDataFrame` 으로 반환. CRS 는 EPSG:5179 (Korea 2000 / Unified CS).

@@ -107,6 +107,14 @@ CELLS = [
         "# 연도 범위\n"
         "adk.find('세종', year=[2010, 2012])\n"
     ),
+    code_cell(
+        "# 체이닝 메서드 — 버전 키를 바로 뽑기\n"
+        "# 여주군은 2013-09-23 여주시로 승격됐으니 first~last 가 1975~2012 여야 정상\n"
+        "r = adk.find('여주군')\n"
+        "print('versions():', r.versions())\n"
+        "print('first()  :', r.first())\n"
+        "print('last()   :', r.last())\n"
+    ),
     md_cell("## 3. `get()` — 지도 다운로드 & 첫 그림\n"),
     code_cell(
         "import time\n"

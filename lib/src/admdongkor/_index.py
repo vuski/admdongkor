@@ -26,6 +26,35 @@ _PUBLIC_COLUMNS = [
 _AUTO_LEVEL = {1: None, 2: "sgg", 3: "emd"}
 
 
+class FindResult(pd.DataFrame):
+    """`find()` 의 반환 타입. `pd.DataFrame` 이므로 pandas 기능 그대로 쓰면서
+    자주 쓰는 버전 키 추출을 체이닝으로.
+
+    Examples:
+        adk.find("여주군").versions()   # ['19751231', '19801231', ...]
+        adk.find("여주군").first()      # '19751231'
+        adk.find("여주군").last()       # '20130701'
+    """
+
+    @property
+    def _constructor(self):
+        return FindResult
+
+    def versions(self) -> list[str]:
+        """매치된 고유 version_key 목록 (정렬된 순서 유지)."""
+        return self["version_key"].drop_duplicates().tolist()
+
+    def first(self) -> str | None:
+        """가장 이른 version_key. 결과가 없으면 `None`."""
+        v = self.versions()
+        return v[0] if v else None
+
+    def last(self) -> str | None:
+        """가장 늦은 version_key. 결과가 없으면 `None`."""
+        v = self.versions()
+        return v[-1] if v else None
+
+
 def _nfc(s: str) -> str:
     return unicodedata.normalize("NFC", s)
 
@@ -111,5 +140,5 @@ def find(
         ["version_key", "_lvl", "code"], kind="stable"
     ).drop(columns="_lvl").reset_index(drop=True)
 
-    # 내부 _fullpath 감추고 공개 컬럼만
-    return out[_PUBLIC_COLUMNS]
+    # 내부 _fullpath 감추고 공개 컬럼만. FindResult 로 감싸 체이닝 메서드 제공.
+    return FindResult(out[_PUBLIC_COLUMNS])

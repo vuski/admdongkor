@@ -204,3 +204,48 @@ def test_sort_order(fake_index):
     # 종로구 sgg 두 개: 1975 먼저, 2025 나중
     df = find("종로구", exact=True)
     assert list(df.version_key) == ["19751231", "20250401"]
+
+
+# ────────── FindResult 체이닝 메서드 ──────────
+
+def test_versions_method(fake_index):
+    vs = find("종로구", exact=True).versions()
+    assert vs == ["19751231", "20250401"]
+
+
+def test_versions_dedupe(fake_index):
+    # 같은 버전 안에 여러 매치 (emd 사직동 + sgg 종로구) 가 있어도 버전키는 유니크
+    vs = find("종로").versions()
+    assert len(vs) == len(set(vs))
+
+
+def test_first_method(fake_index):
+    assert find("종로구", exact=True).first() == "19751231"
+
+
+def test_last_method(fake_index):
+    assert find("종로구", exact=True).last() == "20250401"
+
+
+def test_first_last_empty(fake_index):
+    empty = find("없는이름")
+    assert len(empty) == 0
+    assert empty.first() is None
+    assert empty.last() is None
+
+
+def test_find_returns_findresult_subclass(fake_index):
+    from admdongkor._index import FindResult
+    import pandas as pd
+    df = find("종로구", exact=True)
+    assert isinstance(df, FindResult)
+    assert isinstance(df, pd.DataFrame)
+
+
+def test_findresult_preserves_type_after_filter(fake_index):
+    from admdongkor._index import FindResult
+    df = find("종로")
+    # boolean indexing 결과도 FindResult 유지
+    subset = df[df.level == "sgg"]
+    assert isinstance(subset, FindResult)
+    assert subset.first() is not None

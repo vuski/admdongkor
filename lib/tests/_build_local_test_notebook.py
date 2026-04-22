@@ -134,6 +134,13 @@ CELLS = [
         "adk.find('세종', year=[2010, 2015])\n"
     ),
     code_cell(
+        "# 체이닝 메서드\n"
+        "r = adk.find('여주군')\n"
+        "print('versions():', r.versions())\n"
+        "print('first()  :', r.first())\n"
+        "print('last()   :', r.last())\n"
+    ),
+    code_cell(
         "# 에러 케이스들 — 전부 ValueError 떠야 정상\n"
         "for query, kwargs in [\n"
         "    ('종로', {'year': [2000, 2005, 2010]}),\n"

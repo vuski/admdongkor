@@ -55,13 +55,18 @@ def find(
         year: `[2025]` 단일 연도, `[2000, 2005]` 범위(inclusive). 3개 이상은 ValueError.
 
     Returns:
-        DataFrame. 컬럼 순서:
+        `FindResult` (= `pd.DataFrame` 서브클래스). 컬럼 순서:
         `version_key, level, sidonm, sggnm, name, code, code7, code8, sggcd, sidocd`.
 
         - `code` = level 별 행안부 코드 (sido 2자리 / sgg 5자리 / emd 10자리)
         - `code7`, `code8` = 통계청 7/8자리. emd 레벨에서만 채워짐
         - `sggcd`, `sggnm` = 상위 시군구 (emd 행에서만 채워짐)
         - `sidonm`, `sidocd` = 상위 시도 (emd/sgg 행에서 채워짐)
+
+        체이닝 메서드:
+        - `.versions()` → 매치된 고유 `version_key` 리스트
+        - `.first()` → 가장 이른 version_key (비어있으면 `None`)
+        - `.last()` → 가장 늦은 version_key (비어있으면 `None`)
     """
     return _index.find(name, level=level, exact=exact, year=year)
 
