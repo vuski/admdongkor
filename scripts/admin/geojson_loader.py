@@ -125,11 +125,14 @@ def load_hangjeongdong_geojson(path: str | Path) -> gpd.GeoDataFrame:
                  if schema.sido_name_field else sido_nm_parsed.astype("string"))
     sgg_name = (gdf[schema.sgg_name_field].astype("string")
                 if schema.sgg_name_field else sgg_nm_parsed.astype("string"))
+    emd_name = emd_nm_parsed.astype("string")
 
-    sgg_name = sgg_name.where(
-        ~sgg_name.fillna("").str.contains(" "),
-        sgg_name.fillna("").str.split(" ").str[-1],
-    )
+    # 모든 whitespace(공백/탭/\r/\n 등) 제거 — '수원시 권선구' → '수원시권선구',
+    # '미아6.7동\r\n' → '미아6.7동'. 구형 shapefile 원천 데이터에서 묻어오는
+    # 오염을 방지. adm_nm 원본은 건드리지 않음.
+    sido_name = sido_name.str.replace(r"\s+", "", regex=True)
+    sgg_name = sgg_name.str.replace(r"\s+", "", regex=True)
+    emd_name = emd_name.str.replace(r"\s+", "", regex=True)
 
     bjd_sgg_code = (gdf[schema.sgg_code_field].astype("string").str.strip()
                     if schema.sgg_code_field else
@@ -150,7 +153,7 @@ def load_hangjeongdong_geojson(path: str | Path) -> gpd.GeoDataFrame:
         "code": code,
         "code_len": pd.Series([schema.kostat_len] * len(gdf), dtype="Int8"),
         "bjd_code": bjd,
-        "name": emd_nm_parsed.astype("string"),
+        "name": emd_name,
         "sgg_code": sgg_code,
         "sgg_name": sgg_name,
         "sido_code": sido_code,
