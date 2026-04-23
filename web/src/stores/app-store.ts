@@ -75,8 +75,14 @@ export const useAppStore = create<AppState>((set) => ({
       flyToRequest: { ...req, seq: (s.flyToRequest?.seq ?? 0) + 1, status: "pending" },
     })),
   clearFlyTo: () => set({ flyToRequest: null }),
-  setCompareMode: (v) => set({ compareMode: v }),
-  toggleCompareMode: () => set((s) => ({ compareMode: !s.compareMode })),
+  // 비교 모드 켜질 때 레이블을 자동 OFF (시각적 잡음 제거).
+  // 사용자가 다시 켜는 건 자유 — 한 번 더 덮어쓰지 않는다.
+  setCompareMode: (v) =>
+    set((s) => (v && !s.compareMode ? { compareMode: v, showLabels: false } : { compareMode: v })),
+  toggleCompareMode: () =>
+    set((s) =>
+      !s.compareMode ? { compareMode: true, showLabels: false } : { compareMode: false },
+    ),
   setCompareSplit: (v) => set({ compareSplit: Math.max(0, Math.min(1, v)) }),
   setShowBasemap: (v) => set({ showBasemap: v }),
   toggleBasemap: () => set((s) => ({ showBasemap: !s.showBasemap })),

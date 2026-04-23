@@ -44,6 +44,8 @@ interface Props {
   showControls: boolean;
   showBasemap: boolean;
   showLabels: boolean;
+  /** compare() 결과 diff 하이라이트 레이어. 외부에서 빌드해서 주입. */
+  extraLayers?: import("@deck.gl/layers").GeoJsonLayer[];
   onMove?: (e: ViewStateChangeEvent) => void;
   onHover?: (info: HoverInfo | null) => void;
   interactive: boolean;
@@ -57,6 +59,7 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
     showControls,
     showBasemap,
     showLabels,
+    extraLayers = [],
     onMove,
     onHover,
     interactive,
@@ -145,7 +148,8 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
     [showLabels, side, zoomInt, level, labelData],
   );
 
-  const layers = [...boundaryLayers, ...labelLayers];
+  // diff 레이어는 경계선 위, 레이블 아래에 위치
+  const layers = [...boundaryLayers, ...extraLayers, ...labelLayers];
 
   const handleMove = useCallback(
     (e: ViewStateChangeEvent) => {

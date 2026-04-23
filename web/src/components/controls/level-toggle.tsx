@@ -34,6 +34,9 @@ export function LevelToggle() {
           </button>
         ))}
       </div>
+      <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+        읍면동 선택 후 비교모드 ON 하면 변경이력을 확인할 수 있습니다.
+      </p>
     </div>
   );
 }

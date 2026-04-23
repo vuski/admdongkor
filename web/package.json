@@ -16,6 +16,8 @@
     "@deck.gl/mapbox": "^9.2.0",
     "@mapbox/polylabel": "^1.0.2",
     "admdongkor": "*",
+    "ag-grid-community": "^35.2.1",
+    "ag-grid-react": "^35.2.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",

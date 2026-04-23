@@ -7,6 +7,9 @@ import { useAppStore } from "@/stores/app-store";
 import { useAdmdongkorGeoJSON } from "@/hooks/use-admdongkor-geojson";
 import { CompareDivider } from "./compare-divider";
 import { getFeatureBbox } from "@/hooks/use-admdongkor-geojson";
+import { useCompare } from "@/hooks/use-compare";
+import { buildCompareLayers, getDiffSummary } from "./compare-layers";
+import { DiffWindow } from "./diff-window";
 import { VersionBadge, VersionBadgeA, VersionBadgeB } from "./version-badge";
 import { HoverTooltip } from "./hover-tooltip";
 import type { HoverInfo } from "./hover-types";
@@ -29,7 +32,27 @@ export function MapContainer() {
   const a = useAdmdongkorGeoJSON(versionKey, level);
   const b = useAdmdongkorGeoJSON(versionKeyB, level);
 
+  // compare: emd 레벨 + 비교 모드일 때만 실행
+  const compareEnabled = compareMode && level === "emd";
+  const {
+    result: compareResult,
+    loading: compareLoading,
+    unsupported: compareUnsupported,
+  } = useCompare(versionKey, versionKeyB, compareEnabled);
+
+  const emdDataA = a.layers.find((l) => l.level === "emd")?.data ?? null;
+  const emdDataB = b.layers.find((l) => l.level === "emd")?.data ?? null;
+  const diffLayersA = compareResult ? buildCompareLayers(compareResult, "A", emdDataA) : [];
+  const diffLayersB = compareResult ? buildCompareLayers(compareResult, "B", emdDataB) : [];
+  const diffSummary = compareResult ? getDiffSummary(compareResult) : null;
+
   const [hover, setHover] = useState<HoverInfo | null>(null);
+  const [diffWindowOpen, setDiffWindowOpen] = useState(true);
+
+  // 비교 모드가 꺼지면 diff window 도 함께 닫고, 다시 켜질 때 자동으로 열리도록.
+  useEffect(() => {
+    setDiffWindowOpen(compareMode && level === "emd");
+  }, [compareMode, level]);
 
   // flyToRequest 가 pending 이고 지도 데이터가 로드됐으면 bbox 찾아서 실행.
   useEffect(() => {
@@ -143,6 +166,7 @@ export function MapContainer() {
             showControls={!compareMode}
             showBasemap={showBasemap}
             showLabels={showLabels}
+            extraLayers={diffLayersA}
             onMove={onMoveA}
             onHover={setHover}
             interactive={true}
@@ -171,6 +195,7 @@ export function MapContainer() {
               showControls={true}
               showBasemap={showBasemap}
               showLabels={showLabels}
+              extraLayers={diffLayersB}
               onMove={onMoveB}
               onHover={setHover}
               interactive={true}
@@ -200,7 +225,50 @@ export function MapContainer() {
         </VersionBadgeB>
       )}
 
+      {/* diff 요약 범례 — 비교 모드 + emd 레벨 + 결과 있을 때 */}
+      {compareMode && level === "emd" && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 pointer-events-none max-w-[90%]">
+          {compareUnsupported && (
+            <div className="px-3 py-2 rounded-md bg-amber-50 border border-amber-300 shadow text-[11px] text-amber-900 leading-relaxed">
+              <div className="font-semibold mb-0.5">1990년 이전은 변경이력 지원 안 됨</div>
+              <div>
+                1975·1980·1985 경계 파일은 행정동 10자리 코드가 없어 비교 인덱스에
+                포함되어 있지 않습니다. 1990년 이후 시점끼리 비교해 주세요.
+              </div>
+            </div>
+          )}
+          {compareLoading && !compareResult && !compareUnsupported && (
+            <div className="px-3 py-1.5 rounded-md bg-white/95 border border-black/10 shadow text-[11px] text-neutral-500">
+              경계 비교 계산 중…
+            </div>
+          )}
+          {diffSummary && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/95 border border-black/10 shadow text-[11px] font-mono">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "rgb(234,179,8)" }} />
+                경계변경 {diffSummary.changed}
+              </span>
+              <span className="text-neutral-300">|</span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "rgb(220,38,38)" }} />
+                폐지 {diffSummary.abolished}
+              </span>
+              <span className="text-neutral-300">|</span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "rgb(34,197,94)" }} />
+                신설 {diffSummary.created}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       <HoverTooltip info={hover} />
+
+      {/* 변경이력 플로팅 윈도우 — 비교모드 + emd + 결과 있을 때 */}
+      {compareMode && level === "emd" && compareResult && diffWindowOpen && (
+        <DiffWindow result={compareResult} onClose={() => setDiffWindowOpen(false)} />
+      )}
     </div>
   );
 }
