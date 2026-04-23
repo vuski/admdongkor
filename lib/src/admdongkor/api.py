@@ -110,6 +110,7 @@ def get(
     key: str,
     level: str = "emd",
     *,
+    detail: bool = False,
     crs: str | int | None = None,
     force_refresh: bool = False,
 ) -> gpd.GeoDataFrame:
@@ -118,14 +119,21 @@ def get(
     Args:
         key: 버전 키 문자열 (예: `"20250401"`). int 입력 거부.
         level: `"emd"` / `"sgg"` / `"sido"` 중 하나.
-        crs: 재투영 대상 CRS. `None` (기본) 이면 원본 **EPSG:5179** 유지.
+        detail: False (기본) 이면 **단순화 light 버전**(EPSG:4326, mapshaper 18.7%
+            simplify, 작은 홀 제거) 을 받는다. emd 약 2.4MB / sgg 약 1MB / sido 약 0.5MB.
+            날짜 스위처·웹 지도용. True 면 **원본 해상도**(EPSG:5179, emd 약 11MB) 를 받는다.
+            정밀 분석·오버레이용.
+        crs: 재투영 대상 CRS. `None` (기본) 이면:
+            - `detail=False` → **EPSG:4326** 그대로 (light 파일 원본)
+            - `detail=True`  → **EPSG:5179** 그대로 (원본)
             `"EPSG:4326"` 또는 `4326` 처럼 문자열·int 모두 허용.
         force_refresh: True 면 캐시 무시 재다운로드.
 
     Examples:
-        >>> adk.get("20250401", "sido")                    # EPSG:5179 (기본)
-        >>> adk.get("20250401", "sido", crs="EPSG:4326")   # WGS84
-        >>> adk.get("20250401", "sido", crs=4326)          # int 도 허용
+        >>> adk.get("20250401", "sido")                    # light, EPSG:4326
+        >>> adk.get("20250401", "sido", detail=True)       # 원본, EPSG:5179
+        >>> adk.get("20250401", "sido", crs="EPSG:3857")   # light → Web Mercator
+        >>> adk.get("20250401", "emd", detail=True, crs=4326)  # 원본 → WGS84
     """
     if not isinstance(key, str):
         raise TypeError(
@@ -140,8 +148,13 @@ def get(
     if level not in _LEVELS:
         raise ValueError(f"level must be one of {_LEVELS}, got {level!r}")
 
-    filename = f"{level}_{key}.parquet"
-    path = download_if_needed(filename, force_refresh=force_refresh)
+    if detail:
+        filename = f"{level}_{key}.parquet"
+        path = download_if_needed(filename, force_refresh=force_refresh)
+    else:
+        filename = f"{level}_{key}_light.parquet"
+        path = download_if_needed(filename, subdir="simplified",
+                                  force_refresh=force_refresh)
     gdf = gpd.read_parquet(path)
     if crs is not None:
         gdf = gdf.to_crs(crs)

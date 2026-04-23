@@ -23,6 +23,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 from shapely.geometry import MultiPolygon, Polygon
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -88,21 +89,43 @@ def process_version(version: str) -> tuple[str, int, int, int, float]:
         emd_out = OUT_DIR / f"emd_{version}_light.parquet"
         emd_s.to_parquet(emd_out, compression="snappy")
 
-    # 4) sgg dissolve
-    sgg = emd_s.dissolve(
-        by="sggcd",
-        aggfunc={"sggnm": "first", "sidocd": "first", "sidonm": "first", "area": "sum"},
-    ).reset_index()
+    # 4) sgg dissolve.
+    # 1975/1980/1985 버전은 sggcd/sidocd 가 전부 NULL 이라 이름으로 dissolve.
+    # 이 경우 "sidonm + sggnm" 조합을 키로 써서 동명 시군구(예: '중구') 가
+    # 서로 다른 시도에서 합쳐지지 않게 한다.
+    has_sgg_code = emd_s["sggcd"].notna().any()
+    if has_sgg_code:
+        sgg = emd_s.dissolve(
+            by="sggcd",
+            aggfunc={"sggnm": "first", "sidocd": "first",
+                     "sidonm": "first", "area": "sum"},
+        ).reset_index()
+    else:
+        # 코드가 없는 옛 버전: 이름으로 dissolve. sggcd/sidocd 는 NaN 으로 둠.
+        sgg = emd_s.dissolve(
+            by=["sidonm", "sggnm"],
+            aggfunc={"area": "sum"},
+        ).reset_index()
+        sgg["sggcd"] = pd.NA
+        sgg["sidocd"] = pd.NA
     sgg = sgg[["sggcd", "sggnm", "sidocd", "sidonm", "area", "geometry"]]
     sgg["geometry"] = sgg.geometry.apply(lambda g: _remove_small_holes(g, HOLE_THRESHOLD_DEG2))
     sgg_out = OUT_DIR / f"sgg_{version}_light.parquet"
     sgg.to_parquet(sgg_out, compression="snappy")
 
     # 5) sido dissolve
-    sido = emd_s.dissolve(
-        by="sidocd",
-        aggfunc={"sidonm": "first", "area": "sum"},
-    ).reset_index()
+    has_sido_code = emd_s["sidocd"].notna().any()
+    if has_sido_code:
+        sido = emd_s.dissolve(
+            by="sidocd",
+            aggfunc={"sidonm": "first", "area": "sum"},
+        ).reset_index()
+    else:
+        sido = emd_s.dissolve(
+            by="sidonm",
+            aggfunc={"area": "sum"},
+        ).reset_index()
+        sido["sidocd"] = pd.NA
     sido = sido[["sidocd", "sidonm", "area", "geometry"]]
     sido["geometry"] = sido.geometry.apply(lambda g: _remove_small_holes(g, HOLE_THRESHOLD_DEG2))
     sido_out = OUT_DIR / f"sido_{version}_light.parquet"
