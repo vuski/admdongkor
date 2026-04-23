@@ -3,14 +3,14 @@ import "./globals.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 export const metadata: Metadata = {
-  title: "admdongkor — 한국 행정동 경계 지도",
+  title: "admdongkor — 대한민국 행정동 경계 지도",
   description:
-    "1975년부터 현재까지 62개 시점의 한국 행정동(emd/sgg/sido) 경계를 조회·검색·비교하는 인터랙티브 지도.",
+    "1975년부터 현재까지 62개 시점의 대한민국 행정동(emd/sgg/sido) 경계를 조회·검색·비교하는 인터랙티브 지도.",
   metadataBase: new URL("https://admdongkor.vw-lab.com"),
   openGraph: {
     title: "admdongkor",
     description:
-      "1975년부터 현재까지 한국 행정동 경계를 조회·검색·비교하는 지도.",
+      "1975년부터 현재까지 대한민국 행정동 경계를 조회·검색·비교하는 지도.",
     url: "https://admdongkor.vw-lab.com",
     siteName: "admdongkor",
     type: "website",

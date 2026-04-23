@@ -23,7 +23,9 @@ export function SidebarPanel() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div>
             <h1 className="text-sm font-bold tracking-tight">admdongkor</h1>
-            <p className="text-[11px] text-muted-foreground">한국 행정동 경계 · 1975–</p>
+            <p className="text-[11px] text-muted-foreground">
+              대한민국 행정동 경계 · 1975–
+            </p>
           </div>
           <button
             onClick={toggle}
