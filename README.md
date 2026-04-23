@@ -54,6 +54,31 @@
 - 과거 행정구역 경계 파일에서 중심점을 추출하고 일부 수작업으로 이동시켰습니다.
 - 청원군처럼 도너츠 형상으로 되어 있는 곳은 임의로 옮겼지만, 위치가 마음에 안 들 수도 있습니다. 필요한 부분은 수정해서 사용하시면 됩니다.
 
+## 프로젝트 구조
+
+```
+admdongkor/
+├── parquet/                     # emd/sgg/sido parquet 경계 파일 (EPSG:5179)
+│   └── simplified/              # light 버전 parquet (EPSG:4326, mapshaper 18.7%)
+├── js/                          # npm 라이브러리 (admdongkor)
+│   ├── src/                     # TypeScript 소스
+│   └── dist/                    # 빌드 산출물 (ESM/CJS/DTS)
+├── web/                         # 인터랙티브 데모 사이트 (Next.js 정적 export)
+│   └── src/
+│       ├── app/
+│       ├── components/          # 지도·컨트롤·레이아웃·검색
+│       ├── hooks/
+│       └── stores/
+├── lib/                         # Python 라이브러리 (admdongkor PyPI)
+│   └── src/admdongkor/
+│       └── data/                # 인덱스·타임라인·shape_pairs parquet (embedded)
+├── examples/                    # 예제 Jupyter 노트북
+├── scripts/                     # 빌드·인덱스 생성 스크립트
+├── 통계청MDIS인구용_행정경계중심점/  # MDIS 인구이동 매칭용 행정 경계 중심점 (EPSG:5179)
+├── Etc/                         # 기타 참고 파일
+└── ver20XXXXXX/                 # 시점별 원본 GeoJSON (62개 시점)
+```
+
 ## 파일 버젼
 
 - ver20260401

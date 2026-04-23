@@ -46,7 +46,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
     "hyparquet": "^1.10.0",

@@ -18,8 +18,8 @@ Node 18+ 필요 (글로벌 `fetch` 사용). 브라우저에서도 동작.
 import { versions, get, find, compare, matchAdm } from "admdongkor";
 
 // 시점 목록
-versions();      // ["19751231", ..., "20260401"]
-versions(2025);  // 2025 년만
+versions(); // ["19751231", ..., "20260401"]
+versions(2025); // 2025 년만
 
 // 지도 호출 — GeoJSON FeatureCollection (EPSG:4326)
 const sido = await get("20250401", "sido");
@@ -34,7 +34,7 @@ console.log(r.diff.length, "개 emd 변화");
 // 과거 영역을 현재 경계로 매칭 (가중치)
 const m = await matchAdm({
   base: "20151231",
-  region: "11110",            // 2015 종로구 sgg 코드
+  region: "11110", // 2015 종로구 sgg 코드
   target: "20260401",
 });
 ```
@@ -47,16 +47,16 @@ const m = await matchAdm({
 
 시점 키 목록 반환.
 
-| 인자 | 타입 | 설명 |
-|---|---|---|
+| 인자   | 타입                  | 설명                              |
+| ------ | --------------------- | --------------------------------- |
 | `year` | `number \| undefined` | 4 자리 연도 (int). 생략하면 전체. |
 
 **반환**: `string[]` — 오름차순 정렬된 `YYYYMMDD` 문자열.
 
 ```ts
-versions();           // ["19751231", ..., "20260401"]
-versions(2025);       // ["20250101", "20250401", "20250701", "20251001", "20251231"]
-versions(1999);       // [] — 해당 연도 데이터 없음
+versions(); // ["19751231", ..., "20260401"]
+versions(2025); // ["20250101", "20250401", "20250701", "20251001", "20251231"]
+versions(1999); // [] — 해당 연도 데이터 없음
 ```
 
 ---
@@ -65,14 +65,14 @@ versions(1999);       // [] — 해당 연도 데이터 없음
 
 지도를 **GeoJSON FeatureCollection** 으로 받는다. deck.gl / Leaflet / MapLibre 에 바로 투입.
 
-| 인자 | 타입 | 기본 | 설명 |
-|---|---|---|---|
-| `key` | `string` | — | `versions()` 목록 중 하나 |
-| `level` | `"emd" \| "sgg" \| "sido"` | `"emd"` | |
-| `options.detail` | `boolean` | `false` | `false` = light (단순화, 빠름). `true` = 원본 (emd ~11MB). |
-| `options.baseUrl` | `string` | GitHub raw | CDN / 자체 호스팅으로 교체 가능 |
-| `options.fetch` | `typeof fetch` | 글로벌 `fetch` | 테스트·프록시 주입용 |
-| `options.signal` | `AbortSignal` | — | 취소 |
+| 인자              | 타입                       | 기본           | 설명                                                       |
+| ----------------- | -------------------------- | -------------- | ---------------------------------------------------------- |
+| `key`             | `string`                   | —              | `versions()` 목록 중 하나                                  |
+| `level`           | `"emd" \| "sgg" \| "sido"` | `"emd"`        |                                                            |
+| `options.detail`  | `boolean`                  | `false`        | `false` = light (단순화, 빠름). `true` = 원본 (emd ~11MB). |
+| `options.baseUrl` | `string`                   | GitHub raw     | CDN / 자체 호스팅으로 교체 가능                            |
+| `options.fetch`   | `typeof fetch`             | 글로벌 `fetch` | 테스트·프록시 주입용                                       |
+| `options.signal`  | `AbortSignal`              | —              | 취소                                                       |
 
 **반환 타입** — `AdmFeatureCollection` (표준 GeoJSON):
 
@@ -92,11 +92,11 @@ versions(1999);       // [] — 해당 연도 데이터 없음
 
 레벨별 `properties` 필드:
 
-| 레벨 | properties |
-|---|---|
-| `sido` | `sidocd, sidonm, area` |
-| `sgg` | `sggcd, sggnm, sidocd, sidonm, area` |
-| `emd` | `emd7, emd8, emdcd, emdnm, sggcd, sggnm, sidocd, sidonm, area` |
+| 레벨   | properties                                                     |
+| ------ | -------------------------------------------------------------- |
+| `sido` | `sidocd, sidonm, area`                                         |
+| `sgg`  | `sggcd, sggnm, sidocd, sidonm, area`                           |
+| `emd`  | `emd7, emd8, emdcd, emdnm, sggcd, sggnm, sidocd, sidonm, area` |
 
 - `area` 는 m² (EPSG:5179 기준 계산값)
 - geometry 는 `Polygon` 또는 `MultiPolygon`, CRS 는 EPSG:4326
@@ -104,10 +104,10 @@ versions(1999);       // [] — 해당 연도 데이터 없음
 #### light 용량 참고
 
 | 레벨 | light (detail=false) | 원본 (detail=true) |
-|---|---|---|
-| sido | ~0.5 MB | ~1.5 MB |
-| sgg | ~1 MB | ~4 MB |
-| emd | ~2.4 MB | ~11 MB |
+| ---- | -------------------- | ------------------ |
+| sido | ~0.5 MB              | ~1.5 MB            |
+| sgg  | ~1 MB                | ~4 MB              |
+| emd  | ~2.4 MB              | ~11 MB             |
 
 웹에서 쓸 때는 light 가 기본. 정밀 분석이 필요하면 `detail: true`.
 
@@ -117,15 +117,15 @@ versions(1999);       // [] — 해당 연도 데이터 없음
 
 **parquet 바이트(`ArrayBuffer`) 그대로** 받는다. 파싱 안 함.
 
-| 용도 | 설명 |
-|---|---|
-| Web Worker | transferable 로 넘겨 main thread 부담 최소화 |
-| IndexedDB / Cache API | 바이트 그대로 저장해 재방문 시 즉시 렌더 |
-| parquet-wasm / `@geoarrow/deck.gl-layers` | Arrow 네이티브 파이프라인에 직접 투입 |
+| 용도                                      | 설명                                         |
+| ----------------------------------------- | -------------------------------------------- |
+| Web Worker                                | transferable 로 넘겨 main thread 부담 최소화 |
+| IndexedDB / Cache API                     | 바이트 그대로 저장해 재방문 시 즉시 렌더     |
+| parquet-wasm / `@geoarrow/deck.gl-layers` | Arrow 네이티브 파이프라인에 직접 투입        |
 
 ```ts
 const buf = await getParquet("20260401", "emd");
-worker.postMessage(buf, [buf]);  // zero-copy transfer
+worker.postMessage(buf, [buf]); // zero-copy transfer
 ```
 
 데이터 포맷: geo-parquet spec, geometry WKB, EPSG:4326, snappy 압축.
@@ -136,18 +136,18 @@ worker.postMessage(buf, [buf]);  // zero-copy transfer
 
 행정구역명으로 **인덱스 parquet 전체**를 substring 검색. 공백 토큰 수로 레벨을 자동 추정.
 
-| 쿼리 형태 | 자동 필터 | 예시 |
-|---|---|---|
-| 1 토큰 | 없음 (전 레벨) | `"판교"`, `"종로"` |
-| 2 토큰 | `sgg` | `"서울특별시 종로구"` |
-| 3 토큰 | `emd` | `"서울 종로 사직동"` |
+| 쿼리 형태 | 자동 필터      | 예시                         |
+| --------- | -------------- | ---------------------------- |
+| 1 토큰    | 없음 (전 레벨) | `"판교"`, `"종로"`           |
+| 2 토큰    | `sgg`          | `"서울특별시 종로구"`        |
+| 3 토큰    | `emd`          | `"서울특별시 종로구 사직동"` |
 
-| 옵션 | 타입 | 설명 |
-|---|---|---|
-| `level` | `Level` | 자동 필터보다 우선. 수동 강제. |
-| `exact` | `boolean` | `true` 면 `name` 컬럼 단독 완전일치 (단일 토큰 전용) |
-| `year` | `number[]` | `[2025]` 단일 연도 / `[2000, 2005]` inclusive range |
-| `baseUrl`, `fetch`, `signal` | — | 다른 함수와 동일 |
+| 옵션                         | 타입       | 설명                                                 |
+| ---------------------------- | ---------- | ---------------------------------------------------- |
+| `level`                      | `Level`    | 자동 필터보다 우선. 수동 강제.                       |
+| `exact`                      | `boolean`  | `true` 면 `name` 컬럼 단독 완전일치 (단일 토큰 전용) |
+| `year`                       | `number[]` | `[2025]` 단일 연도 / `[2000, 2005]` inclusive range  |
+| `baseUrl`, `fetch`, `signal` | —          | 다른 함수와 동일                                     |
 
 **반환**: `FindRow[]` — 각 매치는 `(version_key, level, name, code, sidonm, sggnm, ...)` 필드.
 
@@ -155,9 +155,9 @@ worker.postMessage(buf, [buf]);  // zero-copy transfer
 import { find, findFirst, findLast, findVersions } from "admdongkor";
 
 const rows = await find("여주군");
-findFirst(rows);     // "19751231"   (가장 이른 시점)
-findLast(rows);      // "20130701"   (가장 늦은 시점)
-findVersions(rows);  // 매치된 고유 version_key 목록 (정렬됨)
+findFirst(rows); // "19751231"   (가장 이른 시점)
+findLast(rows); // "20130701"   (가장 늦은 시점)
+findVersions(rows); // 매치된 고유 version_key 목록 (정렬됨)
 ```
 
 첫 `find()` 호출 시 인덱스(~1.7MB) 를 한 번 fetch 하고 프로세스 메모리에 캐시한다. `clearIndexCache()` 로 해제.
@@ -171,15 +171,15 @@ findVersions(rows);  // 매치된 고유 version_key 목록 (정렬됨)
 ```ts
 const r = await compare(["20111231", "20260401"], { threshold: 0.99 });
 
-r.same   // 경계 유지된 emd (각 emd 당 2 rows: va + vb)
-r.diff   // 변화 있는 emd. status 컬럼:
-         //   "changed"    — 양쪽 존재, 경계 다름
-         //   "only_in_a"  — va 에만 존재 (소멸)
-         //   "only_in_b"  — vb 에만 존재 (신설)
+r.same; // 경계 유지된 emd (각 emd 당 2 rows: va + vb)
+r.diff; // 변화 있는 emd. status 컬럼:
+//   "changed"    — 양쪽 존재, 경계 다름
+//   "only_in_a"  — va 에만 존재 (소멸)
+//   "only_in_b"  — vb 에만 존재 (신설)
 ```
 
-| 옵션 | 기본 | 설명 |
-|---|---|---|
+| 옵션        | 기본   | 설명                                                                                   |
+| ----------- | ------ | -------------------------------------------------------------------------------------- |
 | `threshold` | `0.99` | shape_id 다를 때 IoU ≥ threshold 면 same 승격. `1.0` 이면 엄격히 shape_id 일치만 same. |
 
 활용: "2011 → 2026 사이 대구에서 경계 바뀐 동들" 같은 변화 탐지 / 인터랙티브 시각화.
@@ -198,19 +198,20 @@ const m = await matchAdm({
   target: "20251231",
 });
 
-m.emd      // MatchEmdRow[]. weight 는 해당 target emd 의 면적 중 base region 에 속한 비율 (0–1)
-await m.sgg();    // sgg 단위 집계. weight = Σ(emd_weight × emd_area) / sgg_total_area
-await m.sido();   // sido 단위 집계
+m.emd; // MatchEmdRow[]. weight 는 해당 target emd 의 면적 중 base region 에 속한 비율 (0–1)
+await m.sgg(); // sgg 단위 집계. weight = Σ(emd_weight × emd_area) / sgg_total_area
+await m.sido(); // sido 단위 집계
 ```
 
-| 옵션 | 타입 | 설명 |
-|---|---|---|
-| `base` | `string` | 기준 시점 |
-| `region` | `string` | 2자리(시도) / 5자리(시군구) / 7자리(통계청 emd) / 10자리(행안부 emd) |
-| `target` | `string \| string[]` | 단일 또는 여러 target 시점 |
-| `minWeight` | `number` | 이 값 미만 weight 제외 (기본 0) |
+| 옵션        | 타입                 | 설명                                                                 |
+| ----------- | -------------------- | -------------------------------------------------------------------- |
+| `base`      | `string`             | 기준 시점                                                            |
+| `region`    | `string`             | 2자리(시도) / 5자리(시군구) / 7자리(통계청 emd) / 10자리(행안부 emd) |
+| `target`    | `string \| string[]` | 단일 또는 여러 target 시점                                           |
+| `minWeight` | `number`             | 이 값 미만 weight 제외 (기본 0)                                      |
 
 활용:
+
 - **인구 재집계**: 2026 기준 통계를 2010 경계로 돌려 비교
 - **서비스 지역 마이그레이션**: 과거 배달/택시 서비스 영역을 현재 행정구역에 재매핑
 - **시계열 패널 데이터 정합**: 행정구역 통폐합으로 끊긴 시계열 이어붙이기
