@@ -18,3 +18,10 @@ lib/src/*.egg-info/
 **/__pycache__/
 *.pyc
 .pytest_cache/
+
+# Node / npm workspaces (js, web)
+node_modules/
+js/dist/
+web/.next/
+web/out/
+*.tsbuildinfo

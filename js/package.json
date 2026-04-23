@@ -1,0 +1,66 @@
+{
+  "name": "admdongkor",
+  "version": "0.1.0",
+  "description": "대한민국 행정동 경계 — 1975년부터 현재까지 60개 이상 시점의 emd/sgg/sido 경계를 light parquet 로 제공",
+  "keywords": [
+    "korea",
+    "admdongkor",
+    "administrative-boundaries",
+    "emd",
+    "sgg",
+    "sido",
+    "geojson",
+    "parquet",
+    "gis"
+  ],
+  "license": "MIT",
+  "author": "vuski",
+  "homepage": "https://github.com/vuski/admdongkor",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vuski/admdongkor.git",
+    "directory": "js"
+  },
+  "bugs": {
+    "url": "https://github.com/vuski/admdongkor/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "hyparquet": "^1.10.0",
+    "hyparquet-compressors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^22.0.0",
+    "rimraf": "^6.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "admdongkor-workspace",
+  "private": true,
+  "workspaces": [
+    "js",
+    "web"
+  ]
+}

@@ -1,0 +1,310 @@
+# admdongkor (npm)
+
+대한민국 행정동 경계 — 1975 년부터 현재까지 **60 개 이상 시점**의 읍면동(emd) / 시군구(sgg) / 시도(sido) 경계를 조회 · 검색 · 비교하는 npm 라이브러리.
+
+파이썬 [`admdongkor`](https://pypi.org/project/admdongkor/) 패키지와 **같은 parquet 파일**을 공유한다. 지도 데이터는 GeoJSON 으로 바로 변환해 돌려주고 (CRS: **EPSG:4326 WGS84**), Leaflet / MapLibre / deck.gl / OpenLayers 에 그대로 투입 가능.
+
+## 설치
+
+```bash
+npm install admdongkor
+```
+
+Node 18+ 필요 (글로벌 `fetch` 사용). 브라우저에서도 동작.
+
+## Quick Start
+
+```ts
+import { versions, get, find, compare, matchAdm } from "admdongkor";
+
+// 시점 목록
+versions();      // ["19751231", ..., "20260401"]
+versions(2025);  // 2025 년만
+
+// 지도 호출 — GeoJSON FeatureCollection (EPSG:4326)
+const sido = await get("20250401", "sido");
+
+// 이름으로 시점 검색
+const rows = await find("판교");
+
+// 두 시점 경계 비교
+const r = await compare(["20111231", "20260401"]);
+console.log(r.diff.length, "개 emd 변화");
+
+// 과거 영역을 현재 경계로 매칭 (가중치)
+const m = await matchAdm({
+  base: "20151231",
+  region: "11110",            // 2015 종로구 sgg 코드
+  target: "20260401",
+});
+```
+
+---
+
+## API
+
+### `versions(year?)`
+
+시점 키 목록 반환.
+
+| 인자 | 타입 | 설명 |
+|---|---|---|
+| `year` | `number \| undefined` | 4 자리 연도 (int). 생략하면 전체. |
+
+**반환**: `string[]` — 오름차순 정렬된 `YYYYMMDD` 문자열.
+
+```ts
+versions();           // ["19751231", ..., "20260401"]
+versions(2025);       // ["20250101", "20250401", "20250701", "20251001", "20251231"]
+versions(1999);       // [] — 해당 연도 데이터 없음
+```
+
+---
+
+### `get(key, level?, options?)`
+
+지도를 **GeoJSON FeatureCollection** 으로 받는다. deck.gl / Leaflet / MapLibre 에 바로 투입.
+
+| 인자 | 타입 | 기본 | 설명 |
+|---|---|---|---|
+| `key` | `string` | — | `versions()` 목록 중 하나 |
+| `level` | `"emd" \| "sgg" \| "sido"` | `"emd"` | |
+| `options.detail` | `boolean` | `false` | `false` = light (단순화, 빠름). `true` = 원본 (emd ~11MB). |
+| `options.baseUrl` | `string` | GitHub raw | CDN / 자체 호스팅으로 교체 가능 |
+| `options.fetch` | `typeof fetch` | 글로벌 `fetch` | 테스트·프록시 주입용 |
+| `options.signal` | `AbortSignal` | — | 취소 |
+
+**반환 타입** — `AdmFeatureCollection` (표준 GeoJSON):
+
+```ts
+{
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      properties: { sidocd: "11", sidonm: "서울특별시", area: 605160000 },
+      geometry: { type: "MultiPolygon", coordinates: [[[[126.88, 37.46], ...]]] }
+    },
+    // ...
+  ]
+}
+```
+
+레벨별 `properties` 필드:
+
+| 레벨 | properties |
+|---|---|
+| `sido` | `sidocd, sidonm, area` |
+| `sgg` | `sggcd, sggnm, sidocd, sidonm, area` |
+| `emd` | `emd7, emd8, emdcd, emdnm, sggcd, sggnm, sidocd, sidonm, area` |
+
+- `area` 는 m² (EPSG:5179 기준 계산값)
+- geometry 는 `Polygon` 또는 `MultiPolygon`, CRS 는 EPSG:4326
+
+#### light 용량 참고
+
+| 레벨 | light (detail=false) | 원본 (detail=true) |
+|---|---|---|
+| sido | ~0.5 MB | ~1.5 MB |
+| sgg | ~1 MB | ~4 MB |
+| emd | ~2.4 MB | ~11 MB |
+
+웹에서 쓸 때는 light 가 기본. 정밀 분석이 필요하면 `detail: true`.
+
+---
+
+### `getParquet(key, level?, options?)`
+
+**parquet 바이트(`ArrayBuffer`) 그대로** 받는다. 파싱 안 함.
+
+| 용도 | 설명 |
+|---|---|
+| Web Worker | transferable 로 넘겨 main thread 부담 최소화 |
+| IndexedDB / Cache API | 바이트 그대로 저장해 재방문 시 즉시 렌더 |
+| parquet-wasm / `@geoarrow/deck.gl-layers` | Arrow 네이티브 파이프라인에 직접 투입 |
+
+```ts
+const buf = await getParquet("20260401", "emd");
+worker.postMessage(buf, [buf]);  // zero-copy transfer
+```
+
+데이터 포맷: geo-parquet spec, geometry WKB, EPSG:4326, snappy 압축.
+
+---
+
+### `find(name, options?)`
+
+행정구역명으로 **인덱스 parquet 전체**를 substring 검색. 공백 토큰 수로 레벨을 자동 추정.
+
+| 쿼리 형태 | 자동 필터 | 예시 |
+|---|---|---|
+| 1 토큰 | 없음 (전 레벨) | `"판교"`, `"종로"` |
+| 2 토큰 | `sgg` | `"서울특별시 종로구"` |
+| 3 토큰 | `emd` | `"서울 종로 사직동"` |
+
+| 옵션 | 타입 | 설명 |
+|---|---|---|
+| `level` | `Level` | 자동 필터보다 우선. 수동 강제. |
+| `exact` | `boolean` | `true` 면 `name` 컬럼 단독 완전일치 (단일 토큰 전용) |
+| `year` | `number[]` | `[2025]` 단일 연도 / `[2000, 2005]` inclusive range |
+| `baseUrl`, `fetch`, `signal` | — | 다른 함수와 동일 |
+
+**반환**: `FindRow[]` — 각 매치는 `(version_key, level, name, code, sidonm, sggnm, ...)` 필드.
+
+```ts
+import { find, findFirst, findLast, findVersions } from "admdongkor";
+
+const rows = await find("여주군");
+findFirst(rows);     // "19751231"   (가장 이른 시점)
+findLast(rows);      // "20130701"   (가장 늦은 시점)
+findVersions(rows);  // 매치된 고유 version_key 목록 (정렬됨)
+```
+
+첫 `find()` 호출 시 인덱스(~1.7MB) 를 한 번 fetch 하고 프로세스 메모리에 캐시한다. `clearIndexCache()` 로 해제.
+
+---
+
+### `compare(versions, options?)`
+
+두 시점의 emd 경계를 비교. 공통 emdcd 의 shape_id 가 같으면 `same`, 다르면 `shape_pairs` 의 IoU 조회 → `threshold` 이상이면 same 승격, 미만이면 `changed`. 한쪽에만 있으면 `only_in_a` / `only_in_b`.
+
+```ts
+const r = await compare(["20111231", "20260401"], { threshold: 0.99 });
+
+r.same   // 경계 유지된 emd (각 emd 당 2 rows: va + vb)
+r.diff   // 변화 있는 emd. status 컬럼:
+         //   "changed"    — 양쪽 존재, 경계 다름
+         //   "only_in_a"  — va 에만 존재 (소멸)
+         //   "only_in_b"  — vb 에만 존재 (신설)
+```
+
+| 옵션 | 기본 | 설명 |
+|---|---|---|
+| `threshold` | `0.99` | shape_id 다를 때 IoU ≥ threshold 면 same 승격. `1.0` 이면 엄격히 shape_id 일치만 same. |
+
+활용: "2011 → 2026 사이 대구에서 경계 바뀐 동들" 같은 변화 탐지 / 인터랙티브 시각화.
+
+---
+
+### `matchAdm(options)`
+
+**과거·미래 영역 매칭** — base 시점의 행정구역 경계에 target 시점 emd 들이 얼마나 걸치는지 (weight) 반환. 경계가 바뀌어 단순 코드 매칭이 안 될 때 씀.
+
+```ts
+// 2015 종로구 → 2025 는 어느 emd 들?
+const m = await matchAdm({
+  base: "20151231",
+  region: "11110",
+  target: "20251231",
+});
+
+m.emd      // MatchEmdRow[]. weight 는 해당 target emd 의 면적 중 base region 에 속한 비율 (0–1)
+await m.sgg();    // sgg 단위 집계. weight = Σ(emd_weight × emd_area) / sgg_total_area
+await m.sido();   // sido 단위 집계
+```
+
+| 옵션 | 타입 | 설명 |
+|---|---|---|
+| `base` | `string` | 기준 시점 |
+| `region` | `string` | 2자리(시도) / 5자리(시군구) / 7자리(통계청 emd) / 10자리(행안부 emd) |
+| `target` | `string \| string[]` | 단일 또는 여러 target 시점 |
+| `minWeight` | `number` | 이 값 미만 weight 제외 (기본 0) |
+
+활용:
+- **인구 재집계**: 2026 기준 통계를 2010 경계로 돌려 비교
+- **서비스 지역 마이그레이션**: 과거 배달/택시 서비스 영역을 현재 행정구역에 재매핑
+- **시계열 패널 데이터 정합**: 행정구역 통폐합으로 끊긴 시계열 이어붙이기
+
+---
+
+## 프레임워크별 예시
+
+### Leaflet
+
+```ts
+import L from "leaflet";
+import { get } from "admdongkor";
+
+const fc = await get("20250401", "sido");
+L.geoJSON(fc, { style: { color: "#2563eb", weight: 1 } }).addTo(map);
+```
+
+### MapLibre GL
+
+```ts
+import maplibregl from "maplibre-gl";
+import { get } from "admdongkor";
+
+const fc = await get("20250401", "sgg");
+map.addSource("adm", { type: "geojson", data: fc });
+map.addLayer({
+  id: "adm-line",
+  type: "line",
+  source: "adm",
+  paint: { "line-color": "#2563eb", "line-width": 1 },
+});
+```
+
+### deck.gl — GeoJsonLayer (간단)
+
+```ts
+import { GeoJsonLayer } from "@deck.gl/layers";
+import { get } from "admdongkor";
+
+const fc = await get("20250401", "emd");
+new GeoJsonLayer({
+  id: "adm",
+  data: fc,
+  stroked: true,
+  filled: true,
+  getFillColor: [37, 99, 235, 40],
+  getLineColor: [37, 99, 235, 200],
+  lineWidthUnits: "pixels",
+  getLineWidth: 1,
+});
+```
+
+### deck.gl — @geoarrow/deck.gl-layers (대용량 · Arrow 네이티브)
+
+emd 원본(`detail: true`, ~11MB) 을 GeoJSON 으로 파싱하면 메모리가 3~5 배로 부풀고 초기 렌더도 느려진다. Arrow 컬럼형 구조를 그대로 GPU 버퍼에 매핑하는 [`@geoarrow/deck.gl-layers`](https://github.com/geoarrow/deck.gl-layers) 를 쓰면 이 과정을 생략할 수 있다.
+
+```bash
+npm install apache-arrow parquet-wasm @geoarrow/deck.gl-layers
+```
+
+```ts
+import { tableFromIPC } from "apache-arrow";
+import { readParquet } from "parquet-wasm";
+import { GeoArrowPolygonLayer } from "@geoarrow/deck.gl-layers";
+import { getParquet } from "admdongkor";
+
+// 1. parquet 바이트 받기 (파싱 안 함)
+const buf = await getParquet("20250401", "emd", { detail: true });
+
+// 2. parquet → Arrow IPC → Arrow Table
+const wasmTable = readParquet(new Uint8Array(buf));
+const table = tableFromIPC(wasmTable.intoIPCStream());
+
+// 3. Arrow Table 을 deck.gl 레이어에 그대로 투입
+new GeoArrowPolygonLayer({
+  id: "adm-arrow",
+  data: table,
+  getGeometry: table.getChild("geometry")!,
+  stroked: true,
+  filled: true,
+  getFillColor: [37, 99, 235, 40],
+  getLineColor: [37, 99, 235, 200],
+  getLineWidth: 1,
+});
+```
+
+파일이 geo-parquet spec 이라 `geometry` 컬럼은 WKB. `@geoarrow/deck.gl-layers` 는 WKB · WKT · geoarrow native encoding 을 전부 지원하므로 별도 변환 불필요.
+
+---
+
+## 데이터 출처 · 라이선스
+
+- 원본 데이터: [github.com/vuski/admdongkor](https://github.com/vuski/admdongkor) — 행정안전부 공개자료 가공
+- 라이선스: MIT
+- 같은 데이터를 쓰는 파이썬 패키지: [PyPI `admdongkor`](https://pypi.org/project/admdongkor/)
+- 라이브 데모: [admdongkor.vw-lab.com](https://admdongkor.vw-lab.com)
