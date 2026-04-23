@@ -139,7 +139,7 @@ CELLS = [
         "\n"
         "# sido 작은 파일로 첫 다운로드 + 캐시 히트 측정\n"
         "# (이미 캐시되어 있으면 첫 번째도 빠름. 지우고 다시 재기)\n"
-        "target = adk.cache_dir() / 'sido_20250401.parquet'\n"
+        "target = adk.cache_dir() / 'simplified' / 'sido_20250401_light.parquet'\n"
         "if target.exists():\n"
         "    target.unlink()\n"
         "\n"
@@ -176,7 +176,7 @@ CELLS = [
     ),
     md_cell("## 5. `force_refresh=True` — 원격에서 다시 받기\n"),
     code_cell(
-        "f = adk.cache_dir() / 'sido_20250401.parquet'\n"
+        "f = adk.cache_dir() / 'simplified' / 'sido_20250401_light.parquet'\n"
         "before = f.stat().st_mtime\n"
         "adk.get('20250401', 'sido', force_refresh=True)\n"
         "after = f.stat().st_mtime\n"
@@ -186,13 +186,14 @@ CELLS = [
     ),
     md_cell("## 6. 캐시 현황 + 총 용량\n"),
     code_cell(
-        "files = sorted(adk.cache_dir().glob('*.parquet'))\n"
+        "files = sorted(adk.cache_dir().rglob('*.parquet'))\n"
         "total = sum(f.stat().st_size for f in files)\n"
         "print(f'cache dir : {adk.cache_dir()}')\n"
         "print(f'files     : {len(files)}')\n"
         "print(f'total     : {total / 1024 / 1024:.1f} MB')\n"
         "for f in files:\n"
-        "    print(f'  {f.stat().st_size / 1024 / 1024:6.2f} MB  {f.name}')\n"
+        "    rel = f.relative_to(adk.cache_dir())\n"
+        "    print(f'  {f.stat().st_size / 1024 / 1024:6.2f} MB  {rel}')\n"
     ),
     md_cell(
         "## 7. 시계열 시각 — 세종시 등장 전후\n"

@@ -38,23 +38,38 @@ def cache_dir() -> Path:
     return Path.home() / ".cache" / _APP_NAME
 
 
-def cached_path(filename: str) -> Path:
-    """캐시 디렉토리 내의 파일 경로 (파일 존재 여부 보장 안 함)."""
-    return cache_dir() / filename
+def cached_path(filename: str, *, subdir: str | None = None) -> Path:
+    """캐시 디렉토리 내의 파일 경로 (파일 존재 여부 보장 안 함).
+
+    subdir 을 주면 `<cache_dir>/<subdir>/<filename>` 으로 해석. 원격 URL 의
+    디렉토리 구조(예: `parquet/simplified/`) 를 캐시에도 그대로 반영한다.
+    """
+    base = cache_dir()
+    if subdir:
+        return base / subdir / filename
+    return base / filename
 
 
-def download_if_needed(filename: str, *, force_refresh: bool = False) -> Path:
+def download_if_needed(
+    filename: str,
+    *,
+    subdir: str | None = None,
+    force_refresh: bool = False,
+) -> Path:
     """캐시에 없으면 raw URL 에서 받아 저장. 있으면 그대로 반환.
 
     Args:
         filename: 예) "emd_20250401.parquet", "_index.parquet"
+        subdir: 원격 `BASE_URL` 하위 경로. 예) `"simplified"` 이면
+            `BASE_URL/simplified/<filename>` 로 내려받고 캐시도
+            `<cache_dir>/simplified/<filename>` 에 저장.
         force_refresh: True 면 캐시 무시하고 재다운로드
     """
-    dst = cached_path(filename)
+    dst = cached_path(filename, subdir=subdir)
     if dst.exists() and not force_refresh:
         return dst
 
-    url = f"{BASE_URL}/{filename}"
+    url = f"{BASE_URL}/{subdir}/{filename}" if subdir else f"{BASE_URL}/{filename}"
     dst.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.NamedTemporaryFile(

@@ -4,7 +4,7 @@ from admdongkor._versions import VERSIONS
 
 
 def test_count():
-    assert len(VERSIONS) == 61
+    assert len(VERSIONS) == 62
 
 
 def test_sorted():
@@ -23,4 +23,4 @@ def test_excluded_keys_not_present():
 
 def test_bounds():
     assert VERSIONS[0] == "19751231"
-    assert VERSIONS[-1] == "20260201"
+    assert VERSIONS[-1] == "20260401"

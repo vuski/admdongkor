@@ -116,24 +116,26 @@ def get(
 ) -> gpd.GeoDataFrame:
     """특정 버전의 지도를 GeoDataFrame 으로 반환.
 
+    **기본 CRS 는 항상 EPSG:5179** (한국 직각좌표계, m 단위). light 파일은
+    저장 포맷상 EPSG:4326 이지만 파이썬 get() 은 자동으로 5179 로 재투영한다.
+    면적·거리 계산을 그대로 할 수 있도록 원본·light 의 기본 CRS 를 일치시킨다.
+
     Args:
         key: 버전 키 문자열 (예: `"20250401"`). int 입력 거부.
         level: `"emd"` / `"sgg"` / `"sido"` 중 하나.
-        detail: False (기본) 이면 **단순화 light 버전**(EPSG:4326, mapshaper 18.7%
-            simplify, 작은 홀 제거) 을 받는다. emd 약 2.4MB / sgg 약 1MB / sido 약 0.5MB.
-            날짜 스위처·웹 지도용. True 면 **원본 해상도**(EPSG:5179, emd 약 11MB) 를 받는다.
-            정밀 분석·오버레이용.
-        crs: 재투영 대상 CRS. `None` (기본) 이면:
-            - `detail=False` → **EPSG:4326** 그대로 (light 파일 원본)
-            - `detail=True`  → **EPSG:5179** 그대로 (원본)
+        detail: False (기본) 이면 **단순화 light 버전**(mapshaper 18.7% simplify,
+            작은 홀 제거) 을 받는다. emd 약 2.4MB / sgg 약 1MB / sido 약 0.5MB.
+            True 면 **원본 해상도**(emd 약 11MB) — 좀 더 상세한 버전이 필요할 때.
+            두 경우 모두 기본 반환 CRS 는 EPSG:5179.
+        crs: 재투영 대상 CRS. `None` (기본) 이면 EPSG:5179 반환.
             `"EPSG:4326"` 또는 `4326` 처럼 문자열·int 모두 허용.
         force_refresh: True 면 캐시 무시 재다운로드.
 
     Examples:
-        >>> adk.get("20250401", "sido")                    # light, EPSG:4326
+        >>> adk.get("20250401", "sido")                    # light, EPSG:5179 (기본)
         >>> adk.get("20250401", "sido", detail=True)       # 원본, EPSG:5179
+        >>> adk.get("20250401", "sido", crs="EPSG:4326")   # light → WGS84
         >>> adk.get("20250401", "sido", crs="EPSG:3857")   # light → Web Mercator
-        >>> adk.get("20250401", "emd", detail=True, crs=4326)  # 원본 → WGS84
     """
     if not isinstance(key, str):
         raise TypeError(
@@ -156,6 +158,10 @@ def get(
         path = download_if_needed(filename, subdir="simplified",
                                   force_refresh=force_refresh)
     gdf = gpd.read_parquet(path)
+    # light 는 저장 CRS 가 4326. 기본 반환은 항상 5179 로 맞춤.
+    # crs 명시 시 그 값이 우선 (5179 에서 최종 CRS 로 재투영).
+    if gdf.crs is not None and gdf.crs.to_epsg() != 5179:
+        gdf = gdf.to_crs(5179)
     if crs is not None:
         gdf = gdf.to_crs(crs)
     return gdf

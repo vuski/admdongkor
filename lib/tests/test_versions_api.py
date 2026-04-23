@@ -34,13 +34,13 @@ def test_head_custom():
 def test_tail_default_5():
     v = adk.versions().tail()
     assert len(v) == 5
-    assert v[-1] == "20260201"
+    assert v[-1] == "20260401"
 
 
 def test_tail_custom():
     v = adk.versions().tail(2)
     assert len(v) == 2
-    assert v[-1] == "20260201"
+    assert v[-1] == "20260401"
 
 
 def test_year_filter():
@@ -69,7 +69,7 @@ def test_year_bool_raises():
 def test_indexable():
     v = adk.versions()
     assert v[0] == "19751231"
-    assert v[-1] == "20260201"
+    assert v[-1] == "20260401"
     assert v[0:3] == ["19751231", "19801231", "19851231"]
 
 

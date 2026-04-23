@@ -2,7 +2,7 @@
 
 한국 행정경계(읍면동/시군구/시도) **1975–2026 시계열** 지도 다운로더 + **영역 기반 시계열 매칭**.
 
-- 61 개 버전의 `GeoDataFrame` 다운로드 (EPSG:5179, WGS84 변환 옵션)
+- 62 개 버전의 `GeoDataFrame` 다운로드 (기본 **단순화 light 버전**, `detail=True` 로 원본 해상도. 반환 CRS 는 항상 EPSG:5179)
 - 이름·코드로 **버전 검색** (`find`)
 - **시점 간 경계 매칭** (`match_adm`) — "2025 대구 영역 ≡ 2011 기준 어느 emd들?"
 - **두 시점 diff** (`compare`) — 경계 바뀐 emd / 소멸 / 신설
@@ -22,7 +22,7 @@ pip install admdongkor
 import admdongkor as adk
 
 # 1. 어떤 버전이 있는지
-adk.versions()                # 61개 전체 (list 서브클래스)
+adk.versions()                # 62개 전체 (list 서브클래스)
 adk.versions().head()         # 처음 5개
 adk.versions().tail()         # 최근 5개
 adk.versions(2025)            # 해당 연도만
@@ -33,9 +33,10 @@ adk.find("서울특별시 종로구")              # 자동으로 sgg
 adk.find("서울특별시 종로구 사직동")         # 자동으로 emd
 adk.find("수원시 권선구")                   # "수원시권선구" 도 매치
 
-# 3. 지도 로드
-adk.get("20250401", "emd")                    # EPSG:5179 (기본)
-adk.get("20250401", "emd", crs="EPSG:4326")   # WGS84 로 변환
+# 3. 지도 로드 (반환은 항상 EPSG:5179)
+adk.get("20250401", "emd")                    # light (약 2.4MB)
+adk.get("20250401", "emd", detail=True)       # 원본 해상도 (약 11MB)
+adk.get("20250401", "emd", crs="EPSG:4326")   # WGS84 로 재투영
 
 # 4. 영역 시계열 매칭 — "2025 대구 영역 → 2011 구성 읍면동"
 r = adk.match_adm(base="20251231", region="27", target="20111231")
@@ -94,22 +95,35 @@ adk.find("여주군").first()      # '19751231'
 adk.find("여주군").last()       # '20121231'
 ```
 
-### `get(key, level="emd", *, crs=None, force_refresh=False) -> GeoDataFrame`
+### `get(key, level="emd", *, detail=False, crs=None, force_refresh=False) -> GeoDataFrame`
 
 특정 버전의 지도. 첫 호출 시 GitHub raw 에서 다운로드해 로컬 캐시.
 
-| 인자            | 설명                                              |
-| --------------- | ------------------------------------------------- |
-| `key`           | 버전 키 문자열. `adk.versions()` 참조             |
-| `level`         | `"emd"` / `"sgg"` / `"sido"`                      |
-| `crs`           | `None` (기본 EPSG:5179), `"EPSG:4326"`, `4326` 등 |
-| `force_refresh` | 캐시 무시 재다운로드                              |
+| 인자            | 설명                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `key`           | 버전 키 문자열. `adk.versions()` 참조                                                                                    |
+| `level`         | `"emd"` / `"sgg"` / `"sido"`                                                                                             |
+| `detail`        | `False` (기본) = **light** (mapshaper 18.7% 단순화, 약 0.5–2.4MB). `True` = **원본** (약 11MB/emd). 반환 CRS 는 둘 다 EPSG:5179 |
+| `crs`           | 재투영 대상. `None` (기본) 이면 EPSG:5179. 문자열/int 모두 허용                                                       |
+| `force_refresh` | 캐시 무시 재다운로드                                                                                                     |
 
 ```python
-adk.get("20250401", "sido")                    # 원본 (EPSG:5179)
+# 기본 (light, EPSG:5179) — 가볍게 지도 받아 면적·거리 계산까지 바로
+adk.get("20250401", "emd")                     # ≈2.4MB
+adk.get("20250401", "sgg")                     # ≈1MB
+adk.get("20250401", "sido")                    # ≈0.5MB
+
+# 원본 해상도
+adk.get("20250401", "emd", detail=True)        # ≈11MB, EPSG:5179
+
+# 다른 CRS 로 재투영
 adk.get("20250401", "sido", crs="EPSG:4326")   # WGS84
-adk.get("20250401", "sido", crs=4326)          # int 허용
+adk.get("20250401", "sido", crs="EPSG:3857")   # Web Mercator
 ```
+
+> **light 파일은 `parquet/simplified/{level}_{key}_light.parquet`** 으로 배포됩니다. 저장 포맷 CRS 는 EPSG:4326 (웹지도 호환용) 이지만 파이썬 `get()` 은 기본값으로 **EPSG:5179 로 재투영해 반환** — 원본과 동일한 기준이라 면적·거리·버퍼 계산이 그대로 동작합니다. npm/JS 쪽에서는 파일을 직접 읽어 4326 으로 바로 사용 가능.
+>
+> light 의 sgg/sido 는 단순화된 emd 를 dissolve 로 생성하여 **레벨 간 경계가 정확히 맞물립니다**. 1975/1980/1985 버전은 원본에 sgg/sido 코드가 없어 이름 기반 dissolve — 해당 sgg/sido 행의 `sggcd`/`sidocd` 는 `<NA>`.
 
 ### `match_adm(*, base, region, target, min_weight=0.0) -> MatchResult`
 

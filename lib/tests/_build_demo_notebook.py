@@ -115,12 +115,16 @@ CELLS = [
         "print('first()  :', r.first())\n"
         "print('last()   :', r.last())\n"
     ),
-    md_cell("## 3. `get()` — 지도 다운로드 & 첫 그림\n"),
+    md_cell("## 3. `get()` — 지도 다운로드 & 첫 그림\n"
+            "\n"
+            "기본은 **light** (단순화, 약 0.5–2.4MB). 반환 CRS 는 항상 EPSG:5179 — "
+            "`detail=True` 로 원본 해상도도 로드 가능. light 저장 포맷은 4326 이지만 "
+            "파이썬 get() 은 자동으로 5179 로 재투영해 반환.\n"),
     code_cell(
         "import time\n"
         "\n"
         "t0 = time.time()\n"
-        "sido = adk.get('20250401', 'sido')\n"
+        "sido = adk.get('20250401', 'sido')          # light 기본\n"
         "t_first = time.time() - t0\n"
         "\n"
         "t0 = time.time()\n"
@@ -129,9 +133,19 @@ CELLS = [
         "\n"
         "print(f'first download : {t_first:.2f}s')\n"
         "print(f'cache hit      : {t_cache:.3f}s ({t_first/max(t_cache, 0.001):.0f}x faster)')\n"
-        "print(f'CRS            : EPSG:{sido.crs.to_epsg()}')\n"
+        "print(f'CRS            : EPSG:{sido.crs.to_epsg()}  (기본 = 5179)')\n"
         "print(f'rows           : {len(sido)}')\n"
         "sido.head()\n"
+    ),
+    code_cell(
+        "# detail=True 로 원본 해상도 로드. 둘 다 반환 CRS 는 5179.\n"
+        "sido_full = adk.get('20250401', 'sido', detail=True)\n"
+        "print(f'light  rows={len(sido)},      crs=EPSG:{sido.crs.to_epsg()}')\n"
+        "print(f'detail rows={len(sido_full)}, crs=EPSG:{sido_full.crs.to_epsg()}')\n"
+        "\n"
+        "# 다른 CRS 원하면 crs= 로\n"
+        "sido_wgs = adk.get('20250401', 'sido', crs='EPSG:4326')\n"
+        "print(f'crs=4326      : EPSG:{sido_wgs.crs.to_epsg()}')\n"
     ),
     code_cell(
         "# 지도 그림 (한국 모양이 나와야 정상)\n"
@@ -152,9 +166,11 @@ CELLS = [
         "ax.set_title(f'서울 읍면동 — 20250401 ({len(seoul)} emds)')\n"
         "ax.set_axis_off()\n"
     ),
-    md_cell("## 5. force_refresh 로 캐시 갱신\n"),
+    md_cell("## 5. force_refresh 로 캐시 갱신\n"
+            "\n"
+            "light 파일은 `cache_dir()/simplified/` 아래, detail 파일은 그 위 `cache_dir()/` 에 저장됨.\n"),
     code_cell(
-        "f = adk.cache_dir() / 'sido_20250401.parquet'\n"
+        "f = adk.cache_dir() / 'simplified' / 'sido_20250401_light.parquet'\n"
         "before = f.stat().st_mtime\n"
         "adk.get('20250401', 'sido', force_refresh=True)\n"
         "after = f.stat().st_mtime\n"
@@ -164,13 +180,14 @@ CELLS = [
     ),
     md_cell("## 6. 캐시 폴더 현황\n"),
     code_cell(
-        "files = sorted(adk.cache_dir().glob('*.parquet'))\n"
+        "files = sorted(adk.cache_dir().rglob('*.parquet'))\n"
         "total = sum(f.stat().st_size for f in files)\n"
         "print(f'cache dir : {adk.cache_dir()}')\n"
         "print(f'files     : {len(files)}')\n"
         "print(f'total     : {total / 1024 / 1024:.1f} MB')\n"
         "for f in files:\n"
-        "    print(f'  {f.stat().st_size / 1024 / 1024:6.2f} MB  {f.name}')\n"
+        "    rel = f.relative_to(adk.cache_dir())\n"
+        "    print(f'  {f.stat().st_size / 1024 / 1024:6.2f} MB  {rel}')\n"
     ),
     md_cell("## 7. 시계열 — 같은 지역을 여러 해 비교\n"),
     code_cell(
