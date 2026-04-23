@@ -43,16 +43,14 @@ CELLS = [
         "# admdongkor — 업로드 전 로컬 검증 노트북\n"
         "\n"
         "이 노트북은 **PyPI 에 올리기 직전** 전 기능을 로컬에서 돌려보는 용도.\n"
-        "`demo.ipynb` 와 달리, 아직 리포에 push 되지 않은 `_index.parquet` 을\n"
-        "리포 `parquet/` 폴더에서 캐시로 시드한 뒤 검증한다.\n"
         "\n"
-        "- `emd/sgg/sido` parquet → 원격 다운로드 (이미 GitHub master 에 있음)\n"
-        "- `_index.parquet` → 로컬 시드 (방금 만들어서 아직 push 전)\n"
+        "- `_index.parquet` + timeline/shape_pairs → **패키지에 embed** (네트워크 0)\n"
+        "- `emd/sgg/sido` 지도 parquet → 원격 다운로드 (GitHub raw)\n"
         "\n"
         "이 파일은 `.gitignore` 에 올라 git 에 추적되지 않음. 재생성은\n"
         "`python tests/_build_local_test_notebook.py`.\n"
     ),
-    md_cell("## 0a. 한글 폰트 설정 (matplotlib plot 용)\n"),
+    md_cell("## 0. 한글 폰트 설정 (matplotlib plot 용)\n"),
     code_cell(
         "import sys\n"
         "import matplotlib\n"
@@ -71,27 +69,8 @@ CELLS = [
         "\n"
         "matplotlib.rcParams['axes.unicode_minus'] = False\n"
         "print(f'matplotlib font: {matplotlib.rcParams[\"font.family\"]}')\n"
-    ),
-    md_cell("## 0b. 인덱스 시드 — 리포 `parquet/_index.parquet` 을 캐시로 복사\n"),
-    code_cell(
-        "import shutil\n"
-        "from pathlib import Path\n"
         "\n"
         "import admdongkor as adk\n"
-        "\n"
-        "REPO_INDEX = Path(r'Z:/Github/admdongkor/parquet/_index.parquet')\n"
-        "assert REPO_INDEX.exists(), f'먼저 python -m admdongkor.build_index 로 만들어야 함: {REPO_INDEX}'\n"
-        "\n"
-        "dst = adk.cache_dir() / '_index.parquet'\n"
-        "dst.parent.mkdir(parents=True, exist_ok=True)\n"
-        "shutil.copy2(REPO_INDEX, dst)\n"
-        "\n"
-        "# 메모리 LRU 도 비움 (이전 세션의 인덱스가 남아있을 수 있음)\n"
-        "from admdongkor import _index\n"
-        "_index.clear_index_cache()\n"
-        "\n"
-        "print(f'seeded {dst}')\n"
-        "print(f'size   {dst.stat().st_size / 1024:.1f} KB')\n"
     ),
     md_cell("## 1. 버전 & 캐시 위치\n"),
     code_cell(
@@ -237,7 +216,95 @@ CELLS = [
         "plt.tight_layout()\n"
     ),
     md_cell(
-        "## 8. 검증 체크리스트\n"
+        "## 8. `match_adm()` — 영역 기반 시계열 매칭\n"
+        "\n"
+        "base 시점 region 영역에 걸치는 target 시점 읍면동 + weight 반환.\n"
+        "핵심 검증 케이스: **2025 대구광역시 영역 → 2011 구성 읍면동**.\n"
+        "2023년 군위군이 대구로 편입됐으므로, 2011 기준으로 보면 **경북 군위군 8개 읍면** 이\n"
+        "현재 대구 영역 안에 들어가 있어야 함.\n"
+    ),
+    code_cell(
+        "# 2025 대구(sidocd=27) 영역을 2011 시점으로 역매칭\n"
+        "r = adk.match_adm(base='20251231', region='27', target='20111231')\n"
+        "print(f'type: {type(r).__name__}, rows: {len(r)}')\n"
+        "print(f'columns: {list(r.columns)}')\n"
+        "r.head(10)\n"
+    ),
+    code_cell(
+        "# 경북 군위군(sggcd=47720) 행들만 확인 — 8개 읍면 전부 weight ~1.0 이어야\n"
+        "gunwi = r[r.sggcd == '47720']\n"
+        "print(f'군위군 읍면 매칭: {len(gunwi)}개')\n"
+        "gunwi[['emdcd', 'emdnm', 'sggnm', 'sidonm', 'weight']]\n"
+    ),
+    code_cell(
+        "# sgg 단위 집계 — 대구 내 모든 sgg + 군위군\n"
+        "r.sgg()\n"
+    ),
+    code_cell(
+        "# sido 단위 집계 — 대구 ~100% + 경북 소수 (= 군위 면적 / 경북 전체)\n"
+        "r.sido()\n"
+    ),
+    code_cell(
+        "# 시각화: 2011 시점 지도에 매칭된 emd 영역 표시\n"
+        "# (원격 다운로드 필요. emd_20111231.parquet 이 크니 시간 걸릴 수 있음)\n"
+        "emd_2011 = adk.get('20111231', 'emd')\n"
+        "sido_2011 = adk.get('20111231', 'sido')\n"
+        "matched = emd_2011[emd_2011.emdcd.isin(r.emdcd)].copy()\n"
+        "matched = matched.merge(r[['emdcd','weight']], on='emdcd')\n"
+        "\n"
+        "fig, ax = plt.subplots(figsize=(10, 11))\n"
+        "sido_2011.plot(ax=ax, edgecolor='black', linewidth=0.4, facecolor='lightgrey')\n"
+        "matched.plot(ax=ax, column='weight', cmap='Reds',\n"
+        "             edgecolor='darkred', linewidth=0.3,\n"
+        "             legend=True, vmin=0, vmax=1, alpha=0.8)\n"
+        "# 경북 군위군 하이라이트 (파란 테두리)\n"
+        "gunwi_geom = matched[matched.sggcd == '47720']\n"
+        "gunwi_geom.plot(ax=ax, facecolor='none', edgecolor='navy', linewidth=1.5)\n"
+        "ax.set_title('2011 읍면동 중 2025 대구 영역에 속하는 것\\n(파란 테두리 = 경북 군위군, 2023 대구 편입 예정)')\n"
+        "ax.set_axis_off()\n"
+    ),
+    code_cell(
+        "# 역방향: 2011 경북 군위군(sggcd=47720) → 2025 어느 영역으로 갔나\n"
+        "r2 = adk.match_adm(base='20111231', region='47720', target='20251231')\n"
+        "print(f'2025 매칭 emd: {len(r2)}개')\n"
+        "r2.head(10)\n"
+    ),
+    code_cell(
+        "# 군위군은 2025 에 대구 군위군(sggcd=27720) 으로 그대로 승계 → sggnm 이 '군위군' 인 emd 들이 나와야\n"
+        "print('sgg 집계:')\n"
+        "r2.sgg()\n"
+    ),
+    code_cell(
+        "# 여러 target 시점을 한 번에 — 2011 vs 2020 vs 2024\n"
+        "r3 = adk.match_adm(\n"
+        "    base='20251231', region='27',\n"
+        "    target=['20111231', '20201001', '20241231'],\n"
+        ")\n"
+        "print('target 별 행 수:')\n"
+        "print(r3.groupby('version_key').size())\n"
+        "print()\n"
+        "print('target 별 sido 집계:')\n"
+        "r3.sido()\n"
+    ),
+    code_cell(
+        "# min_weight 필터 효과\n"
+        "print(f'필터 없음         : {len(r):>4} rows, 최소 weight = {r.weight.min():.4f}')\n"
+        "for th in (0.01, 0.1, 0.5, 0.9):\n"
+        "    rf = adk.match_adm(base='20251231', region='27', target='20111231', min_weight=th)\n"
+        "    print(f'min_weight={th}  : {len(rf):>4} rows')\n"
+    ),
+    code_cell(
+        "# emd 단일 코드 쿼리 — 대구 동구 한 동의 시계열\n"
+        "# 2014년에 통합동 편성 변화가 있었는지 확인\n"
+        "r4 = adk.match_adm(\n"
+        "    base='20251231', region='2714076000',\n"
+        "    target=['20111231', '20141231', '20201001'],\n"
+        ")\n"
+        "print(f'rows: {len(r4)}')\n"
+        "r4\n"
+    ),
+    md_cell(
+        "## 9. 검증 체크리스트\n"
         "\n"
         "- [ ] §1: 61 개 버전 / 2025 5개 나옴\n"
         "- [ ] §2: 종로 검색 결과 지역명이 한글로 제대로 표시\n"
@@ -247,15 +314,33 @@ CELLS = [
         "- [ ] §4 서울 지도: 읍면동 경계 촘촘히\n"
         "- [ ] §5: mtime updated True\n"
         "- [ ] §7 시계열: 2012-12-31 부터 세종(빨강) 등장, 2011 엔 없음\n"
+        "- [ ] §8 match_adm: 2025 대구 → 2011 매칭에 **경북 군위군 8개 읍면** 포함\n"
+        "- [ ] §8 match_adm 지도: 대구 + 군위군(파란 테두리) 영역이 붉게 칠해짐\n"
+        "- [ ] §8 sgg/sido 집계가 이치에 맞음 (대구 ≈1.0, 경북 소수)\n"
+        "- [ ] §8 역방향 쿼리(2011 군위 → 2025) 도 매칭 나옴\n"
         "\n"
         "전부 체크되면 PyPI 업로드 준비 완료.\n"
     ),
 ]
 
 
+def _annotate_cell_numbers(cells: list[dict]) -> list[dict]:
+    """각 셀 맨 앞에 '# cell N' (code) 또는 '<!-- cell N -->' (markdown) 주석 삽입."""
+    out = []
+    for i, c in enumerate(cells, start=1):
+        new = {k: v for k, v in c.items() if k != "source"}
+        if c["cell_type"] == "code":
+            marker = f"# ── cell {i} ──\n"
+        else:
+            marker = f"<!-- cell {i} -->\n"
+        new["source"] = [marker] + list(c["source"])
+        out.append(new)
+    return out
+
+
 def main() -> Path:
     nb = {
-        "cells": CELLS,
+        "cells": _annotate_cell_numbers(CELLS),
         "metadata": {
             "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
             "language_info": {

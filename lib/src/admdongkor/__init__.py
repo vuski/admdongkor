@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from ._cache import cache_dir
-from .api import find, get, get_list
+from .api import compare, find, get, get_list, match_adm, versions
 
-__version__ = "0.1.0"
-__all__ = ["get", "get_list", "find", "cache_dir", "__version__"]
+__version__ = "0.5.0"
+__all__ = ["get", "get_list", "versions", "find", "match_adm", "compare",
+           "cache_dir", "__version__"]

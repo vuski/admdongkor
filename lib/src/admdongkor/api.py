@@ -1,4 +1,4 @@
-"""공개 API: get_list, find, get."""
+"""공개 API: get_list, find, get, match_adm, compare."""
 
 from __future__ import annotations
 
@@ -7,12 +7,47 @@ from typing import Literal
 import geopandas as gpd
 import pandas as pd
 
-from . import _index
+from . import _compare, _index, _match
 from ._cache import download_if_needed
+from ._compare import CompareResult
+from ._match import MatchResult
 from ._versions import VERSIONS
 
 Level = Literal["emd", "sgg", "sido"]
 _LEVELS: tuple[Level, ...] = ("emd", "sgg", "sido")
+
+
+class VersionList(list):
+    """list 서브클래스. pandas 스타일 `.head()` / `.tail()` 편의 메서드 추가.
+
+    모든 표준 list 연산 (인덱싱, 순회, len 등) 가능.
+    """
+
+    def head(self, n: int = 5) -> list[str]:
+        """처음 n 개 (기본 5)."""
+        return list(self[:n])
+
+    def tail(self, n: int = 5) -> list[str]:
+        """마지막 n 개 (기본 5)."""
+        return list(self[-n:]) if n > 0 else []
+
+
+def versions(year: int | None = None) -> VersionList:
+    """버전 키 목록.
+
+    - `adk.versions()` → 전체 버전
+    - `adk.versions(2005)` → 해당 연도만
+    - `adk.versions().head()` / `.tail()` → 처음/마지막 5개
+
+    Args:
+        year: 4자리 연도. **int 만 허용** (문자열 입력은 TypeError).
+    """
+    if year is None:
+        return VersionList(VERSIONS)
+    if not isinstance(year, int) or isinstance(year, bool):
+        raise TypeError(f"year must be int, got {type(year).__name__}")
+    prefix = f"{year:04d}"
+    return VersionList(k for k in VERSIONS if k.startswith(prefix))
 
 
 def get_list(year: int | None = None) -> list[str]:
@@ -75,14 +110,22 @@ def get(
     key: str,
     level: str = "emd",
     *,
+    crs: str | int | None = None,
     force_refresh: bool = False,
 ) -> gpd.GeoDataFrame:
-    """특정 버전의 지도를 GeoDataFrame 으로 반환 (EPSG:5179).
+    """특정 버전의 지도를 GeoDataFrame 으로 반환.
 
     Args:
         key: 버전 키 문자열 (예: `"20250401"`). int 입력 거부.
         level: `"emd"` / `"sgg"` / `"sido"` 중 하나.
+        crs: 재투영 대상 CRS. `None` (기본) 이면 원본 **EPSG:5179** 유지.
+            `"EPSG:4326"` 또는 `4326` 처럼 문자열·int 모두 허용.
         force_refresh: True 면 캐시 무시 재다운로드.
+
+    Examples:
+        >>> adk.get("20250401", "sido")                    # EPSG:5179 (기본)
+        >>> adk.get("20250401", "sido", crs="EPSG:4326")   # WGS84
+        >>> adk.get("20250401", "sido", crs=4326)          # int 도 허용
     """
     if not isinstance(key, str):
         raise TypeError(
@@ -99,4 +142,95 @@ def get(
 
     filename = f"{level}_{key}.parquet"
     path = download_if_needed(filename, force_refresh=force_refresh)
-    return gpd.read_parquet(path)
+    gdf = gpd.read_parquet(path)
+    if crs is not None:
+        gdf = gdf.to_crs(crs)
+    return gdf
+
+
+def match_adm(
+    *,
+    base: str,
+    region: str,
+    target: str | list[str],
+    min_weight: float = 0.0,
+) -> MatchResult:
+    """base 시점 region 영역에 걸치는 target 시점 emd 목록 + weight 반환.
+
+    Args:
+        base: 버전 키 (예: `"20251231"`).
+        region: 2/5/7/10 자리 코드.
+            - 2자리: 시도 (행안부)
+            - 5자리: 시군구 (행안부)
+            - 7자리: 읍면동 (통계청 과거 코드)
+            - 10자리: 읍면동 (행안부)
+        target: 버전 키 하나 또는 리스트.
+        min_weight: 이 값 미만 weight 는 제외. 기본 0.0.
+
+    Returns:
+        `MatchResult`. 컬럼:
+            `version_key, emdcd, emdnm, sggcd, sggnm, sidocd, sidonm, area, weight`
+
+        weight = "target emd 면적 중 base region 영역에 속하는 비율"
+               = `area(target_emd ∩ base_region) / area(target_emd)`
+
+        `.emd()` / `.sgg()` / `.sido()` 로 레벨 변환.
+
+    Examples:
+        >>> adk.match_adm(base="20251231", region="27", target="20111231")
+        # 2025 대구광역시 영역에 걸치는 2011 emd 들 (군위군 + 당시 대구)
+        >>> adk.match_adm(base="20251231", region="27", target=["20111231", "20241231"]).sgg()
+        # sgg 단위 집계 (각 sgg 의 몇 %가 base 영역에 속하는가)
+    """
+    if base not in VERSIONS:
+        raise ValueError(
+            f"unknown base version key: {base!r}. "
+            "Use adk.get_list() to see available keys."
+        )
+    if isinstance(target, str):
+        target_list = [target]
+    elif isinstance(target, list):
+        target_list = target
+    else:
+        raise TypeError("target must be str or list[str]")
+    for t in target_list:
+        if t not in VERSIONS:
+            raise ValueError(
+                f"unknown target version key: {t!r}. "
+                "Use adk.get_list() to see available keys."
+            )
+    return _match.match_adm(
+        base=base, region=region, target=target, min_weight=min_weight,
+    )
+
+
+def compare(versions: list[str], threshold: float = 0.99) -> CompareResult:
+    """두 시점 emd 비교. 경계·이름·코드 변화 찾기.
+
+    Args:
+        versions: `[va, vb]` 정확히 2개. 버전 키 문자열.
+        threshold: shape_id 가 다를 때도 shape 간 IoU >= threshold 면 same 으로 승격.
+            기본 0.99 (미세 경계 변화 무시). 1.0 으로 주면 엄격히 shape_id 일치만.
+
+    Returns:
+        `CompareResult`. 두 메서드 제공:
+            - `.same()` → 공간 동일 (threshold 이상) emd 들. emdcd 당 2 rows (va, vb).
+            - `.diff()` → 변화 있는 emd 들. status 컬럼으로 구분:
+                * `changed`   : 둘 다 존재하는데 경계 달라짐 (iou < threshold)
+                * `only_in_a` : va 에만 존재 (vb 에서 소멸)
+                * `only_in_b` : vb 에만 존재 (va 이후 신설)
+
+    Examples:
+        >>> r = adk.compare(["20251231", "20111231"])
+        >>> r.same().head()   # 경계 유지된 emd 들
+        >>> r.diff()          # 변화된 emd 들 + status
+    """
+    if not isinstance(versions, list):
+        raise TypeError(f"versions must be list, got {type(versions).__name__}")
+    for v in versions:
+        if v not in VERSIONS:
+            raise ValueError(
+                f"unknown version key: {v!r}. "
+                "Use adk.get_list() to see available keys."
+            )
+    return _compare.compare(versions=versions, threshold=threshold)

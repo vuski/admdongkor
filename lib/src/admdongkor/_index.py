@@ -1,14 +1,17 @@
-"""인덱스(_index.parquet) 로드 + find() 내부 필터 로직."""
+"""인덱스(_index.parquet) 로드 + find() 내부 필터 로직.
+
+인덱스는 패키지에 embed (lib/src/admdongkor/data/_index.parquet).
+importlib.resources 로 접근하므로 네트워크·다운로드 0.
+"""
 
 from __future__ import annotations
 
 import unicodedata
 from functools import lru_cache
+from importlib.resources import files
 from typing import Literal
 
 import pandas as pd
-
-from ._cache import download_if_needed
 
 _INDEX_FILENAME = "_index.parquet"
 Level = Literal["sido", "sgg", "emd"]
@@ -61,10 +64,9 @@ def _nfc(s: str) -> str:
 
 @lru_cache(maxsize=1)
 def _load_index() -> pd.DataFrame:
-    """_index.parquet 를 캐시에서 로드 (없으면 다운로드). LRU 로 프로세스 내 재사용."""
-    path = download_if_needed(_INDEX_FILENAME)
-    df = pd.read_parquet(path)
-    return df
+    """패키지 내 embed 된 _index.parquet 를 로드. LRU 로 프로세스 내 재사용."""
+    with files("admdongkor.data").joinpath(_INDEX_FILENAME).open("rb") as f:
+        return pd.read_parquet(f)
 
 
 def clear_index_cache() -> None:

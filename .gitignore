@@ -2,6 +2,11 @@
 CLAUDE.md
 .venv/*
 
+# 0.2.0 영역 시계열 매칭 실측 산출물 (커밋 대상 아님)
+scripts/_*.md
+scripts/_*.parquet
+scripts/_*.json
+
 # PyPI 업로드 전 로컬 검증용 노트북 (git 에는 생성 스크립트만 올림)
 lib/tests/local_test.ipynb
 
