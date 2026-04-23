@@ -35,7 +35,12 @@ jobs:
           cache: "npm"
 
       - name: Install workspace dependencies
-        run: npm ci
+        # npm bug (https://github.com/npm/cli/issues/4828) drops platform-specific
+        # optional deps when lockfile is generated on another OS. Remove lockfile +
+        # lockdir so rollup's linux-x64-gnu native binary gets picked up on CI.
+        run: |
+          rm -rf node_modules package-lock.json js/node_modules web/node_modules
+          npm install
 
       - name: Build admdongkor (js)
         working-directory: js
