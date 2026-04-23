@@ -29,6 +29,8 @@ interface AppState {
   compareMode: boolean;
   /** 0–1, 지도 컨테이너 width 기준. 0.5 = 가운데. */
   compareSplit: number;
+  /** split divider 드래그 중 여부. 드래그 중에는 hover pick 을 중단해 깜빡임/비용 방지. */
+  compareDragging: boolean;
   showBasemap: boolean;
   showLabels: boolean;
   isSidebarOpen: boolean;
@@ -42,6 +44,7 @@ interface AppState {
   setCompareMode: (v: boolean) => void;
   toggleCompareMode: () => void;
   setCompareSplit: (v: number) => void;
+  setCompareDragging: (v: boolean) => void;
   setShowBasemap: (v: boolean) => void;
   toggleBasemap: () => void;
   setShowLabels: (v: boolean) => void;
@@ -62,6 +65,7 @@ export const useAppStore = create<AppState>((set) => ({
   flyToRequest: null,
   compareMode: false,
   compareSplit: 0.5,
+  compareDragging: false,
   showBasemap: true,
   showLabels: true,
   isSidebarOpen: true,
@@ -84,6 +88,7 @@ export const useAppStore = create<AppState>((set) => ({
       !s.compareMode ? { compareMode: true, showLabels: false } : { compareMode: false },
     ),
   setCompareSplit: (v) => set({ compareSplit: Math.max(0, Math.min(1, v)) }),
+  setCompareDragging: (v) => set({ compareDragging: v }),
   setShowBasemap: (v) => set({ showBasemap: v }),
   toggleBasemap: () => set((s) => ({ showBasemap: !s.showBasemap })),
   setShowLabels: (v) => set({ showLabels: v }),

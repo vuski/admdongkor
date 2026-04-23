@@ -26,6 +26,7 @@ export function MapContainer() {
   const split = useAppStore((s) => s.compareSplit);
   const showBasemap = useAppStore((s) => s.showBasemap);
   const showLabels = useAppStore((s) => s.showLabels);
+  const compareDragging = useAppStore((s) => s.compareDragging);
   const flyToRequest = useAppStore((s) => s.flyToRequest);
   const clearFlyTo = useAppStore((s) => s.clearFlyTo);
 
@@ -48,6 +49,20 @@ export function MapContainer() {
 
   const [hover, setHover] = useState<HoverInfo | null>(null);
   const [diffWindowOpen, setDiffWindowOpen] = useState(true);
+
+  // split drag 중에는 툴팁/하이라이트 끄기
+  useEffect(() => {
+    if (compareDragging) setHover(null);
+  }, [compareDragging]);
+
+  // drag 중에는 hover 콜백도 무시 (autoHighlight 유발 방지)
+  const onHoverGated = useCallback(
+    (info: HoverInfo | null) => {
+      if (compareDragging) return;
+      setHover(info);
+    },
+    [compareDragging],
+  );
 
   // 비교 모드가 꺼지면 diff window 도 함께 닫고, 다시 켜질 때 자동으로 열리도록.
   useEffect(() => {
@@ -168,7 +183,8 @@ export function MapContainer() {
             showLabels={showLabels}
             extraLayers={diffLayersA}
             onMove={onMoveA}
-            onHover={setHover}
+            onHover={onHoverGated}
+            pickingDisabled={compareDragging}
             interactive={true}
           />
         </div>
@@ -197,7 +213,8 @@ export function MapContainer() {
               showLabels={showLabels}
               extraLayers={diffLayersB}
               onMove={onMoveB}
-              onHover={setHover}
+              onHover={onHoverGated}
+            pickingDisabled={compareDragging}
               interactive={true}
             />
           </div>

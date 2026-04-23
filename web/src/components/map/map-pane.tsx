@@ -46,6 +46,8 @@ interface Props {
   showLabels: boolean;
   /** compare() 결과 diff 하이라이트 레이어. 외부에서 빌드해서 주입. */
   extraLayers?: import("@deck.gl/layers").GeoJsonLayer[];
+  /** split drag 등으로 hover 비활성화 시 pickable/autoHighlight 전부 끔. */
+  pickingDisabled?: boolean;
   onMove?: (e: ViewStateChangeEvent) => void;
   onHover?: (info: HoverInfo | null) => void;
   interactive: boolean;
@@ -60,6 +62,7 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
     showBasemap,
     showLabels,
     extraLayers = [],
+    pickingDisabled = false,
     onMove,
     onHover,
     interactive,
@@ -82,6 +85,7 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
   //   (선만 있으면 hover 영역이 선 위로만 제한돼 잡기 어려움)
   const boundaryLayers = dataLayers.map(({ level: lv, data }) => {
     const isCurrent = lv === level;
+    const pickable = isCurrent && !pickingDisabled;
     return new GeoJsonLayer({
       id: `adm-${side}-${lv}`,
       data,
@@ -94,11 +98,11 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
       getLineColor: linePalette[lv],
       lineWidthUnits: "pixels",
       getLineWidth: lineWidthForLevel(lv),
-      pickable: isCurrent,
-      autoHighlight: isCurrent,
+      pickable,
+      autoHighlight: pickable,
       highlightColor:
         side === "A" ? [28, 112, 87, 80] : [194, 80, 15, 80],
-      onHover: isCurrent
+      onHover: pickable
         ? (info) => {
             if (!onHover) return;
             if (!info.object) {

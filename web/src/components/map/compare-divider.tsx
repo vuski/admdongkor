@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 export function CompareDivider() {
   const split = useAppStore((s) => s.compareSplit);
   const setSplit = useAppStore((s) => s.setCompareSplit);
+  const setCompareDragging = useAppStore((s) => s.setCompareDragging);
   const draggingRef = useRef(false);
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -29,6 +30,7 @@ export function CompareDivider() {
     };
     const onUp = () => {
       draggingRef.current = false;
+      setCompareDragging(false);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
@@ -40,7 +42,7 @@ export function CompareDivider() {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [updateFromClientX]);
+  }, [updateFromClientX, setCompareDragging]);
 
   return (
     <div
@@ -53,6 +55,7 @@ export function CompareDivider() {
         onPointerDown={(e) => {
           e.preventDefault();
           draggingRef.current = true;
+          setCompareDragging(true);
           document.body.style.cursor = "ew-resize";
           document.body.style.userSelect = "none";
         }}
