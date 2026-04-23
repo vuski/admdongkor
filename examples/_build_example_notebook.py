@@ -63,8 +63,10 @@ CELLS = [
         "    !fc-cache -fv > /dev/null\n"
     ),
     code(
+        "import glob\n"
         "import matplotlib\n"
         "import matplotlib.pyplot as plt\n"
+        "from matplotlib import font_manager\n"
         "\n"
         "# 한글 폰트\n"
         "if sys.platform == 'win32':\n"
@@ -72,8 +74,10 @@ CELLS = [
         "elif sys.platform == 'darwin':\n"
         "    matplotlib.rcParams['font.family'] = 'AppleGothic'\n"
         "else:\n"
-        "    from matplotlib import font_manager\n"
-        "    # Colab 에선 apt 로 설치한 Nanum 이 잡힘\n"
+        "    # Linux (Colab 포함). apt 로 설치된 폰트 직접 주입 (matplotlib 캐시 우회).\n"
+        "    for path in glob.glob('/usr/share/fonts/**/Nanum*.ttf', recursive=True) + \\\n"
+        "                glob.glob('/usr/share/fonts/**/NotoSansCJK*.ttc', recursive=True):\n"
+        "        font_manager.fontManager.addfont(path)\n"
         "    for cand in ('NanumGothic', 'Noto Sans CJK KR', 'UnDotum'):\n"
         "        if any(cand in f.name for f in font_manager.fontManager.ttflist):\n"
         "            matplotlib.rcParams['font.family'] = cand\n"
