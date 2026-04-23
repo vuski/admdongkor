@@ -4,24 +4,48 @@ import { create } from "zustand";
 import type { Level } from "admdongkor";
 import { VERSIONS } from "admdongkor";
 
+export interface FlyToRequest {
+  /** GeoJSON bbox [minLon, minLat, maxLon, maxLat]. */
+  bbox?: [number, number, number, number];
+  center?: [number, number];
+  zoom?: number;
+  /** 매번 새 요청임을 구분하기 위한 카운터. */
+  seq: number;
+  /** pending: 지도 데이터 로딩 완료 대기 중. done: 실행 완료. */
+  status: "pending" | "done";
+  /** 클릭한 feature 를 찾기 위한 정보 (pending 상태에서 bbox 직접 계산용). */
+  codeField?: string | null;
+  codeValue?: string | null;
+  level?: string;
+  /** 코드가 없을 때 이름으로 fallback 매칭. */
+  nameFields?: Record<string, string>;
+}
+
 interface AppState {
   versionKey: string;
   versionKeyB: string;
   level: Level;
-  detail: boolean;
+  flyToRequest: FlyToRequest | null;
   compareMode: boolean;
   /** 0–1, 지도 컨테이너 width 기준. 0.5 = 가운데. */
   compareSplit: number;
+  showBasemap: boolean;
+  showLabels: boolean;
   isSidebarOpen: boolean;
   isRightPanelOpen: boolean;
 
   setVersionKey: (v: string) => void;
   setVersionKeyB: (v: string) => void;
   setLevel: (l: Level) => void;
-  setDetail: (d: boolean) => void;
+  requestFlyTo: (req: Omit<FlyToRequest, "seq" | "status">) => void;
+  clearFlyTo: () => void;
   setCompareMode: (v: boolean) => void;
   toggleCompareMode: () => void;
   setCompareSplit: (v: number) => void;
+  setShowBasemap: (v: boolean) => void;
+  toggleBasemap: () => void;
+  setShowLabels: (v: boolean) => void;
+  toggleLabels: () => void;
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
   setSidebarOpen: (v: boolean) => void;
@@ -35,19 +59,29 @@ export const useAppStore = create<AppState>((set) => ({
   versionKey: DEFAULT_VERSION,
   versionKeyB: EARLIER_VERSION,
   level: "sido",
-  detail: false,
+  flyToRequest: null,
   compareMode: false,
   compareSplit: 0.5,
+  showBasemap: true,
+  showLabels: true,
   isSidebarOpen: true,
   isRightPanelOpen: true,
 
   setVersionKey: (v) => set({ versionKey: v }),
   setVersionKeyB: (v) => set({ versionKeyB: v }),
   setLevel: (l) => set({ level: l }),
-  setDetail: (d) => set({ detail: d }),
+  requestFlyTo: (req) =>
+    set((s) => ({
+      flyToRequest: { ...req, seq: (s.flyToRequest?.seq ?? 0) + 1, status: "pending" },
+    })),
+  clearFlyTo: () => set({ flyToRequest: null }),
   setCompareMode: (v) => set({ compareMode: v }),
   toggleCompareMode: () => set((s) => ({ compareMode: !s.compareMode })),
   setCompareSplit: (v) => set({ compareSplit: Math.max(0, Math.min(1, v)) }),
+  setShowBasemap: (v) => set({ showBasemap: v }),
+  toggleBasemap: () => set((s) => ({ showBasemap: !s.showBasemap })),
+  setShowLabels: (v) => set({ showLabels: v }),
+  toggleLabels: () => set((s) => ({ showLabels: !s.showLabels })),
   toggleSidebar: () => set((s) => ({ isSidebarOpen: !s.isSidebarOpen })),
   toggleRightPanel: () => set((s) => ({ isRightPanelOpen: !s.isRightPanelOpen })),
   setSidebarOpen: (v) => set({ isSidebarOpen: v }),

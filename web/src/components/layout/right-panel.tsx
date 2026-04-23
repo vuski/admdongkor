@@ -12,15 +12,15 @@ export function RightPanel() {
 
   return (
     <div
-      className="relative h-full border-l border-[var(--border)] bg-[var(--background)] transition-[width] duration-300 overflow-hidden flex-shrink-0"
+      className="relative h-full border-l border-border bg-background transition-[width] duration-300 overflow-hidden shrink-0"
       style={{ width: isOpen ? `${WIDTH}px` : "0px" }}
     >
       <div className="h-full flex flex-col" style={{ width: WIDTH }}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 className="text-sm font-semibold">검색 · 조회</h2>
           <button
             onClick={toggle}
-            className="p-1.5 rounded-md hover:bg-[var(--muted)]"
+            className="p-1.5 rounded-md hover:bg-muted"
             aria-label="우측 패널 닫기"
           >
             <PanelRightClose className="h-4 w-4" />

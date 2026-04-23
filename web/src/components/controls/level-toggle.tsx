@@ -17,7 +17,7 @@ export function LevelToggle() {
   return (
     <div>
       <label className="text-xs font-medium block mb-1.5">레벨</label>
-      <div className="grid grid-cols-3 gap-1 p-0.5 rounded-md bg-[var(--muted)] border border-[var(--border)]">
+      <div className="grid grid-cols-3 gap-1 p-0.5 rounded-md bg-muted border border-border">
         {LEVELS.map((l) => (
           <button
             key={l.value}
@@ -25,8 +25,8 @@ export function LevelToggle() {
             className={cn(
               "px-2 py-1.5 rounded text-xs transition",
               level === l.value
-                ? "bg-[var(--background)] shadow-sm font-semibold"
-                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+                ? "bg-background shadow-sm font-semibold"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             <div>{l.label}</div>

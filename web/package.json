@@ -10,10 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@deck.gl/core": "^9.2.0",
+    "@deck.gl/extensions": "^9.2.11",
+    "@deck.gl/layers": "^9.2.0",
+    "@deck.gl/mapbox": "^9.2.0",
+    "@mapbox/polylabel": "^1.0.2",
     "admdongkor": "*",
-    "@deck.gl/core": "^9.2.11",
-    "@deck.gl/layers": "^9.2.11",
-    "@deck.gl/mapbox": "^9.2.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",

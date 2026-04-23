@@ -24,7 +24,7 @@ export function AppShell() {
         {!isSidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="absolute top-3 left-3 z-10 p-2 rounded-md bg-[var(--background)] border border-[var(--border)] shadow hover:bg-[var(--muted)]"
+            className="absolute top-3 left-3 z-10 p-2 rounded-md bg-background border border-border shadow hover:bg-muted"
             aria-label="사이드바 열기"
           >
             <PanelLeftOpen className="h-4 w-4" />
@@ -34,7 +34,7 @@ export function AppShell() {
         {!isRightPanelOpen && (
           <button
             onClick={() => setRightPanelOpen(true)}
-            className="absolute top-3 right-3 z-10 p-2 rounded-md bg-[var(--background)] border border-[var(--border)] shadow hover:bg-[var(--muted)]"
+            className="absolute top-3 right-3 z-10 p-2 rounded-md bg-background border border-border shadow hover:bg-muted"
             aria-label="우측 패널 열기"
           >
             <PanelRightOpen className="h-4 w-4" />
