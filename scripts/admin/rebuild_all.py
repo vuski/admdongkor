@@ -101,11 +101,19 @@ def phase1_build_parquets(versions: list[str], dry_run: bool) -> None:
 
 
 def phase2_build_find_index(dry_run: bool) -> None:
-    """_versions.py 재생성 + admdongkor.build_index CLI → parquet/_index.parquet."""
+    """_versions.py 재생성 + admdongkor.build_index CLI → lib/data/_index.parquet.
+
+    output 을 직접 lib/src/admdongkor/data/ 로 지정해 phase 4 에서 복사 불필요.
+    """
     print("\n=== PHASE 2: _versions.py + find() 인덱스 재빌드 ===", flush=True)
     regenerate_versions_py(dry_run)
+    if not dry_run:
+        LIB_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    index_out = LIB_DATA_DIR / "_index.parquet"
     rc = run([PYTHON, "-m", "admdongkor.build_index",
-              "--data-root", str(PARQUET_DIR), "--verbose"],
+              "--data-root", str(PARQUET_DIR),
+              "--output", str(index_out),
+              "--verbose"],
              dry_run=dry_run)
     if rc != 0:
         raise RuntimeError(f"phase2 failed (rc={rc})")
@@ -137,42 +145,33 @@ def phase3_build_timeseries_index(workers: int, dry_run: bool) -> None:
 
 
 def phase4_move_indexes(dry_run: bool) -> None:
-    """인덱스 산출물을 parquet/ 및 lib/src/admdongkor/data/ 로 배포.
+    """인덱스 산출물을 lib/src/admdongkor/data/ 로 배포 (wheel embed 용).
 
-    - parquet/: GitHub raw URL 용 (지도 다운로드용 parquet 들과 함께)
-    - lib/src/admdongkor/data/: wheel 에 embed 되는 사본 (사용자가 네트워크 없이 동작)
+    phase 3 중간 산출물 (scripts/_timeline_v3_*.parquet, scripts/_shape_pairs_v3_*.parquet,
+    parquet/_index.parquet) 을 lib/src/admdongkor/data/ 로 모은다.
+
+    이전에는 parquet/ 에도 복사했지만, 라이브러리는 인덱스를 importlib.resources
+    로 embed 에서만 읽고 GitHub raw 에서 받지 않으므로 단일 canonical 위치만 유지.
     """
-    print("\n=== PHASE 4: 인덱스 배포 (parquet/ + lib/data/) ===", flush=True)
+    print("\n=== PHASE 4: 인덱스 배포 (lib/data/) ===", flush=True)
 
-    # phase 3 산출물 → parquet/ 로
-    moves = []
+    if not dry_run:
+        LIB_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 1) phase 3 산출물 (scripts/_timeline_v3_*.parquet 등) → lib/data/
     for level in ("sido", "sgg", "emd"):
         for fname in (f"_timeline_v3_{level}.parquet",
                       f"_shape_pairs_v3_{level}.parquet"):
             src = SCRIPTS_DIR / fname
-            dst = PARQUET_DIR / fname.lstrip("_")  # parquet 폴더에선 _prefix 제거
-            moves.append((src, dst))
+            dst = LIB_DATA_DIR / fname.lstrip("_")  # lib/data/ 에선 _prefix 제거
+            if not src.exists():
+                print(f"  WARN: {src} 없음 (phase3 건너뛴 경우?)", flush=True)
+                continue
+            print(f"  {src.name} -> {dst.relative_to(REPO_ROOT)}", flush=True)
+            if not dry_run:
+                shutil.copy2(src, dst)
 
-    for src, dst in moves:
-        if not src.exists():
-            print(f"  WARN: {src} 없음 (phase3 건너뛴 경우?)", flush=True)
-            continue
-        print(f"  {src.name} -> {dst.relative_to(REPO_ROOT)}", flush=True)
-        if not dry_run:
-            shutil.copy2(src, dst)
-
-    # parquet/ → lib/src/admdongkor/data/ 로 (embed 사본)
-    if not dry_run:
-        LIB_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    for fname in EMBED_FILES:
-        src = PARQUET_DIR / fname
-        dst = LIB_DATA_DIR / fname
-        if not src.exists():
-            print(f"  WARN: {src} 없음 (embed 생략)", flush=True)
-            continue
-        print(f"  {src.name} -> {dst.relative_to(REPO_ROOT)}", flush=True)
-        if not dry_run:
-            shutil.copy2(src, dst)
+    # phase 2 의 _index.parquet 은 phase2 에서 직접 lib/data/ 로 쓰므로 복사 불필요
 
 
 def main() -> int:
