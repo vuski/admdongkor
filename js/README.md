@@ -15,29 +15,31 @@ Node 18+ 필요 (글로벌 `fetch` 사용). 브라우저에서도 동작.
 ## Quick Start
 
 ```ts
-import { versions, get, find, compare, matchAdm } from "admdongkor";
+import * as adk from "admdongkor";
 
 // 시점 목록
-versions(); // ["19751231", ..., "20260401"]
-versions(2025); // 2025 년만
+adk.versions(); // ["19751231", ..., "20260401"]
+adk.versions(2025); // 2025 년만
 
 // 지도 호출 — GeoJSON FeatureCollection (EPSG:4326)
-const sido = await get("20250401", "sido");
+const sido = await adk.get("20250401", "sido");
 
 // 이름으로 시점 검색
-const rows = await find("판교");
+const rows = await adk.find("판교");
 
 // 두 시점 경계 비교
-const r = await compare(["20111231", "20260401"]);
+const r = await adk.compare(["20111231", "20260401"]);
 console.log(r.diff.length, "개 emd 변화");
 
 // 과거 영역을 현재 경계로 매칭 (가중치)
-const m = await matchAdm({
+const m = await adk.matchAdm({
   base: "20151231",
   region: "11110", // 2015 종로구 sgg 코드
   target: "20260401",
 });
 ```
+
+> named import (`import { get, find } from "admdongkor"`) 도 동일하게 지원한다. 다른 라이브러리와 이름 충돌이 걱정되면 위처럼 namespace 로 받아 `adk.get` / `adk.find` 로 쓰는 걸 권장. (파이썬 패키지 `import admdongkor as adk` 와 같은 스타일.)
 
 ---
 
@@ -124,7 +126,7 @@ versions(1999); // [] — 해당 연도 데이터 없음
 | parquet-wasm / `@geoarrow/deck.gl-layers` | Arrow 네이티브 파이프라인에 직접 투입        |
 
 ```ts
-const buf = await getParquet("20260401", "emd");
+const buf = await adk.getParquet("20260401", "emd");
 worker.postMessage(buf, [buf]); // zero-copy transfer
 ```
 
@@ -152,12 +154,12 @@ worker.postMessage(buf, [buf]); // zero-copy transfer
 **반환**: `FindRow[]` — 각 매치는 `(version_key, level, name, code, sidonm, sggnm, ...)` 필드.
 
 ```ts
-import { find, findFirst, findLast, findVersions } from "admdongkor";
+import * as adk from "admdongkor";
 
-const rows = await find("여주군");
-findFirst(rows); // "19751231"   (가장 이른 시점)
-findLast(rows); // "20130701"   (가장 늦은 시점)
-findVersions(rows); // 매치된 고유 version_key 목록 (정렬됨)
+const rows = await adk.find("여주군");
+adk.findFirst(rows); // "19751231"   (가장 이른 시점)
+adk.findLast(rows); // "20130701"   (가장 늦은 시점)
+adk.findVersions(rows); // 매치된 고유 version_key 목록 (정렬됨)
 ```
 
 첫 `find()` 호출 시 인덱스(~1.7MB) 를 한 번 fetch 하고 프로세스 메모리에 캐시한다. `clearIndexCache()` 로 해제.
@@ -224,9 +226,9 @@ await m.sido(); // sido 단위 집계
 
 ```ts
 import L from "leaflet";
-import { get } from "admdongkor";
+import * as adk from "admdongkor";
 
-const fc = await get("20250401", "sido");
+const fc = await adk.get("20250401", "sido");
 L.geoJSON(fc, { style: { color: "#2563eb", weight: 1 } }).addTo(map);
 ```
 
@@ -234,9 +236,9 @@ L.geoJSON(fc, { style: { color: "#2563eb", weight: 1 } }).addTo(map);
 
 ```ts
 import maplibregl from "maplibre-gl";
-import { get } from "admdongkor";
+import * as adk from "admdongkor";
 
-const fc = await get("20250401", "sgg");
+const fc = await adk.get("20250401", "sgg");
 map.addSource("adm", { type: "geojson", data: fc });
 map.addLayer({
   id: "adm-line",
@@ -250,9 +252,9 @@ map.addLayer({
 
 ```ts
 import { GeoJsonLayer } from "@deck.gl/layers";
-import { get } from "admdongkor";
+import * as adk from "admdongkor";
 
-const fc = await get("20250401", "emd");
+const fc = await adk.get("20250401", "emd");
 new GeoJsonLayer({
   id: "adm",
   data: fc,
@@ -277,10 +279,10 @@ npm install apache-arrow parquet-wasm @geoarrow/deck.gl-layers
 import { tableFromIPC } from "apache-arrow";
 import { readParquet } from "parquet-wasm";
 import { GeoArrowPolygonLayer } from "@geoarrow/deck.gl-layers";
-import { getParquet } from "admdongkor";
+import * as adk from "admdongkor";
 
 // 1. parquet 바이트 받기 (파싱 안 함)
-const buf = await getParquet("20250401", "emd", { detail: true });
+const buf = await adk.getParquet("20250401", "emd", { detail: true });
 
 // 2. parquet → Arrow IPC → Arrow Table
 const wasmTable = readParquet(new Uint8Array(buf));
