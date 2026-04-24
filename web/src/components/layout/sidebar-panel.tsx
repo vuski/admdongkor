@@ -2,24 +2,28 @@
 
 import { PanelLeftClose } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { VersionSlider } from "@/components/controls/version-slider";
 import { LevelToggle } from "@/components/controls/level-toggle";
 import { DetailToggle } from "@/components/controls/detail-toggle";
 import { BasemapToggle } from "@/components/controls/basemap-toggle";
 import { LabelToggle } from "@/components/controls/label-toggle";
 
-const WIDTH = 320;
+const WIDTH_DESKTOP = 320;
+const WIDTH_MOBILE = Math.round(WIDTH_DESKTOP * 0.6);
 
 export function SidebarPanel() {
   const isOpen = useAppStore((s) => s.isSidebarOpen);
   const toggle = useAppStore((s) => s.toggleSidebar);
+  const isMobile = useIsMobile();
+  const width = isMobile ? WIDTH_MOBILE : WIDTH_DESKTOP;
 
   return (
     <div
       className="relative h-full border-r border-border bg-background transition-[width] duration-300 overflow-hidden shrink-0"
-      style={{ width: isOpen ? `${WIDTH}px` : "0px" }}
+      style={{ width: isOpen ? `${width}px` : "0px" }}
     >
-      <div className="h-full flex flex-col" style={{ width: WIDTH }}>
+      <div className="h-full flex flex-col" style={{ width }}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div>
             <h1 className="text-sm font-bold tracking-tight">admdongkor</h1>

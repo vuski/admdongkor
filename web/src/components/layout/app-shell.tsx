@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { SidebarPanel } from "./sidebar-panel";
 import { RightPanel } from "./right-panel";
 import { useAppStore } from "@/stores/app-store";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
 
 const MapContainer = dynamic(
@@ -16,6 +18,11 @@ export function AppShell() {
   const isRightPanelOpen = useAppStore((s) => s.isRightPanelOpen);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    if (isMobile) setRightPanelOpen(false);
+  }, [isMobile, setRightPanelOpen]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">

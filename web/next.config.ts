@@ -5,6 +5,7 @@ const config: NextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   reactStrictMode: true,
+  allowedDevOrigins: ["192.168.0.19"],
 };
 
 export default config;
