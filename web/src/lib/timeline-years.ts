@@ -1,0 +1,50 @@
+/** 기본 추적 연도 선택 로직.
+ *  "1975 부터 5년마다 + 최근 버전" — 한 해에 여러 버전이 있으면 그 해의 마지막 것.
+ *  해당 연도에 데이터 없으면 skip. */
+
+export function yearOf(versionKey: string): number {
+  return Number(versionKey.slice(0, 4));
+}
+
+export function pickDefaultVersions(
+  allVersions: string[],
+  step = 5,
+): string[] {
+  if (allVersions.length === 0) return [];
+  const sorted = [...allVersions].sort();
+  const byYear = new Map<number, string[]>();
+  for (const v of sorted) {
+    const y = yearOf(v);
+    const arr = byYear.get(y) ?? [];
+    arr.push(v);
+    byYear.set(y, arr);
+  }
+  // 한 해의 '마지막' 버전.
+  const lastOfYear = new Map<number, string>();
+  for (const [y, arr] of byYear) {
+    lastOfYear.set(y, arr[arr.length - 1]!);
+  }
+
+  const minYear = yearOf(sorted[0]!);
+  const maxYear = yearOf(sorted[sorted.length - 1]!);
+  const startYear = Math.ceil(minYear / step) * step;
+  // 1975 부터 5년: 1975, 1980, ...
+  // startYear 계산이 1975 로 떨어지지 않는 경우 대비: minYear 가 1975 면 그대로.
+  const origin = minYear;
+  const picked = new Set<string>();
+
+  // 정렬된 basis: minYear 가 1975 이면 1975, 1980, ...
+  for (let y = origin; y <= maxYear; y += step) {
+    const v = lastOfYear.get(y);
+    if (v) picked.add(v);
+  }
+
+  // 최근 버전 (전체 배열의 마지막) 도 강제 포함.
+  picked.add(sorted[sorted.length - 1]!);
+
+  return [...picked].sort();
+}
+
+export function fmtVersionLabel(v: string): string {
+  return `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}`;
+}

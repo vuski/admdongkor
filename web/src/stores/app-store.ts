@@ -21,6 +21,8 @@ export interface FlyToRequest {
   nameFields?: Record<string, string>;
 }
 
+export type RightPanelTab = "search" | "timeline";
+
 interface AppState {
   versionKey: string;
   versionKeyB: string;
@@ -35,6 +37,10 @@ interface AppState {
   showLabels: boolean;
   isSidebarOpen: boolean;
   isRightPanelOpen: boolean;
+  /** 우측 패널 탭. search = 기존 검색/조회, timeline = 시계열추적. */
+  rightPanelTab: RightPanelTab;
+  /** 시계열 뷰가 활성화되면 지도 대신 타임라인 스크롤을 보여준다. */
+  timelineViewActive: boolean;
 
   setVersionKey: (v: string) => void;
   setVersionKeyB: (v: string) => void;
@@ -53,6 +59,8 @@ interface AppState {
   toggleRightPanel: () => void;
   setSidebarOpen: (v: boolean) => void;
   setRightPanelOpen: (v: boolean) => void;
+  setRightPanelTab: (t: RightPanelTab) => void;
+  setTimelineViewActive: (v: boolean) => void;
 }
 
 const DEFAULT_VERSION = VERSIONS[VERSIONS.length - 1];
@@ -70,6 +78,8 @@ export const useAppStore = create<AppState>((set) => ({
   showLabels: true,
   isSidebarOpen: true,
   isRightPanelOpen: true,
+  rightPanelTab: "search",
+  timelineViewActive: false,
 
   setVersionKey: (v) => set({ versionKey: v }),
   setVersionKeyB: (v) => set({ versionKeyB: v }),
@@ -97,4 +107,6 @@ export const useAppStore = create<AppState>((set) => ({
   toggleRightPanel: () => set((s) => ({ isRightPanelOpen: !s.isRightPanelOpen })),
   setSidebarOpen: (v) => set({ isSidebarOpen: v }),
   setRightPanelOpen: (v) => set({ isRightPanelOpen: v }),
+  setRightPanelTab: (t) => set({ rightPanelTab: t }),
+  setTimelineViewActive: (v) => set({ timelineViewActive: v }),
 }));

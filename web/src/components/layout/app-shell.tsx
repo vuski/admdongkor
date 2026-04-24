@@ -13,11 +13,20 @@ const MapContainer = dynamic(
   { ssr: false },
 );
 
+const TimelineView = dynamic(
+  () =>
+    import("@/components/timeline/timeline-view").then((m) => ({
+      default: m.TimelineView,
+    })),
+  { ssr: false },
+);
+
 export function AppShell() {
   const isSidebarOpen = useAppStore((s) => s.isSidebarOpen);
   const isRightPanelOpen = useAppStore((s) => s.isRightPanelOpen);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
+  const timelineViewActive = useAppStore((s) => s.timelineViewActive);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -37,7 +46,7 @@ export function AppShell() {
             <PanelLeftOpen className="h-4 w-4" />
           </button>
         )}
-        <MapContainer />
+        {timelineViewActive ? <TimelineView /> : <MapContainer />}
         {!isRightPanelOpen && (
           <button
             onClick={() => setRightPanelOpen(true)}
