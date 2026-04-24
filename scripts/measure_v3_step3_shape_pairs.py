@@ -20,6 +20,9 @@ Output:
 
 실행:
     python scripts/measure_v3_step3_shape_pairs.py --level sido --workers 60
+
+최적화 (2026-04-24):
+    - 워커 initializer 로 필요한 버전들만 한 번씩 선로드 (기존: 쌍마다 load_level 2회).
 """
 
 from __future__ import annotations
@@ -36,20 +39,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import LEVEL_COLS, OUT_DIR, load_level
 
 
-def _pair_task(args: tuple[str, int, int, str, str, str, str]) -> dict:
-    """(sid_a, sid_b) 의 대표 도형 두 개 로드해서 intersection."""
-    level, sid_a, sid_b, rep_va, rep_ea, rep_vb, rep_eb = args
+# 워커 전역 캐시: version -> dict[element_id_str, geometry]
+_CACHE: dict[str, dict[str, object]] = {}
+
+
+def _init_worker(level: str, versions: list[str]) -> None:
     id_col = LEVEL_COLS[level]["id"]
-    ga_gdf = load_level(rep_va, level)
-    gb_gdf = load_level(rep_vb, level)
-    ga_gdf[id_col] = ga_gdf[id_col].astype(str)
-    gb_gdf[id_col] = gb_gdf[id_col].astype(str)
-    ra = ga_gdf[ga_gdf[id_col] == str(rep_ea)]
-    rb = gb_gdf[gb_gdf[id_col] == str(rep_eb)]
-    if len(ra) == 0 or len(rb) == 0:
-        return {}
-    ga = ra.geometry.iloc[0]
-    gb = rb.geometry.iloc[0]
+    for v in versions:
+        gdf = load_level(v, level)
+        gdf = gdf[[id_col, "geometry"]].dropna(subset=[id_col])
+        # 중복 id 가 있을 때 기존 구현(load_level + iloc[0])과 맞추기 위해
+        # 첫 등장만 유지. dict(zip) 은 마지막 값이 덮어써서 불일치 발생했음.
+        cache: dict[str, object] = {}
+        for k, g in zip(gdf[id_col].astype(str).values, gdf.geometry.values):
+            if k not in cache:
+                cache[k] = g
+        _CACHE[v] = cache
+
+
+def _pair_task(args: tuple[str, int, int, str, str, str, str]) -> dict:
+    level, sid_a, sid_b, rep_va, rep_ea, rep_vb, rep_eb = args
+    ga = _CACHE[rep_va].get(str(rep_ea))
+    gb = _CACHE[rep_vb].get(str(rep_eb))
     if ga is None or gb is None or ga.is_empty or gb.is_empty:
         return {}
     area_a = ga.area
@@ -77,10 +88,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--level", choices=["emd", "sgg", "sido"], required=True)
     ap.add_argument("--workers", type=int, default=60)
+    ap.add_argument("--iou-in", type=str, default=None,
+                    help="step1 결과 경로 override (기본: scripts/_spatial_iou_<level>.parquet)")
+    ap.add_argument("--timeline-in", type=str, default=None,
+                    help="step2 결과 경로 override (기본: scripts/_timeline_v3_<level>.parquet)")
+    ap.add_argument("--out", type=str, default=None,
+                    help="출력 경로 override (기본: scripts/_shape_pairs_v3_<level>.parquet)")
     args = ap.parse_args()
 
-    iou_path = OUT_DIR / f"_spatial_iou_{args.level}.parquet"
-    tl_path = OUT_DIR / f"_timeline_v3_{args.level}.parquet"
+    iou_path = Path(args.iou_in) if args.iou_in else OUT_DIR / f"_spatial_iou_{args.level}.parquet"
+    tl_path = Path(args.timeline_in) if args.timeline_in else OUT_DIR / f"_timeline_v3_{args.level}.parquet"
     if not iou_path.exists() or not tl_path.exists():
         print("ERROR: run step1/step2 first", flush=True)
         return 1
@@ -89,16 +106,13 @@ def main() -> int:
     tl = pd.read_parquet(tl_path)
     print(f"loaded iou: {len(iou):,}, timeline: {len(tl):,}", flush=True)
 
-    # (version_key, element_id) -> shape_id
     tl_key = tl.set_index(["version_key", "element_id"])["shape_id"].to_dict()
 
-    # shape_id -> (rep_version, rep_element_id) — 첫 등장
     rep_map: dict[int, tuple[str, str]] = {}
     for r in tl.sort_values("version_key").itertuples(index=False):
         rep_map.setdefault(int(r.shape_id), (r.version_key, r.element_id))
     print(f"unique shapes: {len(rep_map)}", flush=True)
 
-    # step1 의 edge 중 IoU < 0.99 (다른 shape) 쌍에서 shape_id 쌍 추출
     diff = iou[iou.iou < 0.99]
     shape_pairs_raw: set[tuple[int, int]] = set()
     for r in diff.itertuples(index=False):
@@ -109,19 +123,28 @@ def main() -> int:
         pair = tuple(sorted([int(sa), int(sb)]))
         shape_pairs_raw.add(pair)
 
-    # 공간 crosslink 가 없어서 놓친 쌍은 없나? step1 에 없으면 공간적 교차 없음 → weight 0 → 저장 불필요
     print(f"unique shape pairs to compute: {len(shape_pairs_raw):,}", flush=True)
 
     tasks = []
+    needed_versions: set[str] = set()
     for sa, sb in shape_pairs_raw:
         rep_va, rep_ea = rep_map[sa]
         rep_vb, rep_eb = rep_map[sb]
         tasks.append((args.level, sa, sb, rep_va, rep_ea, rep_vb, rep_eb))
+        needed_versions.add(rep_va)
+        needed_versions.add(rep_vb)
+
+    versions_list = sorted(needed_versions)
+    print(f"versions to preload per worker: {len(versions_list)}", flush=True)
 
     t0 = time.perf_counter()
     rows: list[dict] = []
     done = 0
-    with ProcessPoolExecutor(max_workers=args.workers) as ex:
+    with ProcessPoolExecutor(
+        max_workers=args.workers,
+        initializer=_init_worker,
+        initargs=(args.level, versions_list),
+    ) as ex:
         futs = [ex.submit(_pair_task, t) for t in tasks]
         for fut in as_completed(futs):
             done += 1
@@ -139,7 +162,8 @@ def main() -> int:
                 print(f"  [{done}/{len(tasks)}] elapsed={elapsed:.1f}s, rate={rate:.1f}/s, eta={eta:.0f}s", flush=True)
 
     df = pd.DataFrame(rows)
-    out_path = OUT_DIR / f"_shape_pairs_v3_{args.level}.parquet"
+    out_path = Path(args.out) if args.out else OUT_DIR / f"_shape_pairs_v3_{args.level}.parquet"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out_path, index=False)
     total = time.perf_counter() - t0
     print(f"\ndone in {total:.1f}s", flush=True)
