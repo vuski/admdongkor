@@ -486,7 +486,7 @@ function TimelineCell({
         border: isBaseVersion ? "3px solid #dc2626" : "1px solid var(--border)",
       }}
     >
-      <div className="absolute top-1.5 left-2 text-[11px] font-mono text-muted-foreground z-10 pointer-events-none bg-background/80 px-1 rounded">
+      <div className="absolute top-1.5 left-2 text-[16px] font-mono text-muted-foreground z-10 pointer-events-none bg-background/80 px-1 rounded">
         {fmtVersionLabel(version)}
       </div>
       {!slice && !error && (
