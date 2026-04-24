@@ -225,6 +225,7 @@ export function TimelinePanel() {
           nameMap={nameMap}
           codes={[...selectedCodes]}
           onRemove={removeCode}
+          onClearAll={() => setSelectedCodes(new Set())}
           baseVersion={baseVersion}
         />
       )}
@@ -386,17 +387,26 @@ function SelectedChips({
   codes,
   baseVersion,
   onRemove,
+  onClearAll,
 }: {
   level: "sido" | "sgg";
   nameMap: Map<string, { name: string; sidonm?: string }>;
   codes: string[];
   baseVersion: string;
   onRemove: (code: string) => void;
+  onClearAll: () => void;
 }) {
   return (
     <div className="border border-accent/50 bg-accent/5 rounded-md p-2 text-xs space-y-1">
-      <div className="text-[10px] text-muted-foreground">
-        선택 {codes.length}개 · 기준 {fmtVersionLabel(baseVersion)}
+      <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+        <span>선택 {codes.length}개 · 기준 {fmtVersionLabel(baseVersion)}</span>
+        <button
+          type="button"
+          onClick={onClearAll}
+          className="px-1.5 py-0.5 rounded border border-border hover:border-accent hover:text-accent transition"
+        >
+          모두 비우기
+        </button>
       </div>
       <div className="flex flex-wrap gap-1">
         {codes.map((code) => {

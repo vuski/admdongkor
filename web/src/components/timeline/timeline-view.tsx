@@ -26,7 +26,8 @@ interface NameMaps {
 
 const CELL_HEIGHT = 360;
 
-/** 시도별 파스텔 색 10종. 한 번 본 sidocd 는 안정적으로 같은 색. */
+/** 파스텔 색 10종 + 그에 대응하는 hue 값 (HSL). 10 을 넘으면 hue hash 기반으로
+ *  추가 생성하되 이미 쓴 hue 와 겹치지 않게 재뽑기 한다. */
 const PASTEL_PALETTE = [
   "#c6e4f5", // 하늘
   "#f5d6c6", // 복숭아
@@ -39,6 +40,63 @@ const PASTEL_PALETTE = [
   "#c6c6f0", // 라일락
   "#d6e6f0", // 연청
 ];
+/** 위 색들의 hue (0~360). 충돌 회피 판정 전용. */
+const PASTEL_HUES = [205, 20, 95, 320, 270, 45, 160, 0, 240, 210];
+/** 새 hue 와 기존 hue 의 최소 각도 거리 (도). 이보다 가까우면 충돌로 본다. */
+const HUE_MIN_GAP = 25;
+
+function hashKey(s: string): number {
+  // djb2
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  }
+  return h >>> 0;
+}
+
+function hueDist(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hp = h / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  let r = 0, g = 0, b = 0;
+  if (hp < 1) { r = c; g = x; }
+  else if (hp < 2) { r = x; g = c; }
+  else if (hp < 3) { g = c; b = x; }
+  else if (hp < 4) { g = x; b = c; }
+  else if (hp < 5) { r = x; b = c; }
+  else { r = c; b = x; }
+  const m = l - c / 2;
+  const toHex = (v: number) =>
+    Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+/** key hash 로 시작 hue 를 정하고, 이미 쓴 hue 와 HUE_MIN_GAP 이상 떨어지도록
+ *  golden-angle 보폭으로 회전시킨다. 결정적(같은 key + 같은 usedHues → 같은 색). */
+function pastelFromKeyUnique(key: string, usedHues: number[]): string {
+  const h0 = hashKey(key) % 360;
+  const step = 137.5; // golden angle
+  for (let i = 0; i < 360; i++) {
+    const hue = (h0 + step * i) % 360;
+    let ok = true;
+    for (const u of usedHues) {
+      if (hueDist(hue, u) < HUE_MIN_GAP) { ok = false; break; }
+    }
+    if (ok) {
+      usedHues.push(hue);
+      // 파스텔: saturation 40%, lightness 85%
+      return hslToHex(hue, 0.4, 0.85);
+    }
+  }
+  // 360 색상 다 써서 빈 hue 가 없으면 gap 조건 무시하고 hash hue 그대로.
+  usedHues.push(h0);
+  return hslToHex(h0, 0.4, 0.85);
+}
 
 export function TimelineView() {
   const query = useTimelineStore((s) => s.query);
@@ -198,26 +256,8 @@ export function TimelineView() {
     };
   }, [query, versions]);
 
-  // 초기 viewport: 기준 버전 slice 의 bbox 를 fit. 없으면 가장 최근 target 의 bbox 로 fallback.
-  useEffect(() => {
-    if (!query || viewport) return;
-    const base = slices.get(query.baseVersion);
-    let bbox = base?.bbox;
-    if (!bbox) {
-      // 로드된 slice 중 가장 새로운 (version 문자열 최대) 것의 bbox.
-      const sorted = [...slices.entries()]
-        .filter(([, s]) => s.exists && s.bbox)
-        .sort((a, b) => (a[0] < b[0] ? 1 : -1));
-      if (sorted.length > 0) bbox = sorted[0]![1].bbox;
-    }
-    if (!bbox) return;
-    const [minX, minY, maxX, maxY] = bbox;
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    const latSpan = Math.max(0.001, maxY - minY);
-    const pxPerDeg = (CELL_HEIGHT * 0.85) / latSpan;
-    setViewport({ center: [cx, cy], scale: pxPerDeg, initialBBox: bbox });
-  }, [query, slices, viewport, setViewport]);
+  // 초기 viewport 는 셀 내부에서 계산 — bbox + 셀의 실제 픽셀 width/height 둘 다
+  // 있어야 잘리지 않고 fit 가능하기 때문.
 
   // 쿼리 변경 시 viewport + baseGeometries 초기화, 선택 대상 각각의 geometry 로드.
   const lastQueryKey = useRef<string | null>(null);
@@ -380,6 +420,32 @@ function TimelineCell({
     return () => ro.disconnect();
   }, []);
 
+  // 초기 viewport 세팅: 기준 연도 셀이 bbox+width 를 알게 된 순간에 계산.
+  //   width/height 두 축 중 더 제약이 큰 쪽에 맞춰 scale 결정 → 어느 방향으로도 잘리지 않음.
+  //   기준 연도가 없거나 exists=false 면 (드문 케이스) 로드된 가장 최근 slice 중 첫 셀이 담당.
+  const setViewportStore = useTimelineStore((s) => s.setViewport);
+  useEffect(() => {
+    if (viewport) return;
+    if (!slice || !slice.exists || !slice.bbox) return;
+    if (width === 0) return;
+    if (!isBaseVersion) return; // 기준 연도 셀만 viewport 초기화 담당
+    const [minX, minY, maxX, maxY] = slice.bbox;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const lonSpan = Math.max(0.0001, maxX - minX);
+    const latSpan = Math.max(0.0001, maxY - minY);
+    // equirectangular: 한 픽셀에 1도 = scale (lat), scale*cos(lat) (lon)
+    const cosLat = Math.cos((cy * Math.PI) / 180);
+    const scaleByHeight = (CELL_HEIGHT * 0.9) / latSpan;
+    const scaleByWidth = (width * 0.9) / (lonSpan * cosLat);
+    const scale = Math.min(scaleByHeight, scaleByWidth);
+    setViewportStore({
+      center: [cx, cy],
+      scale,
+      initialBBox: slice.bbox,
+    });
+  }, [slice, width, viewport, isBaseVersion, setViewportStore]);
+
   // 그리기.
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -486,7 +552,7 @@ function TimelineCell({
         border: isBaseVersion ? "3px solid #dc2626" : "1px solid var(--border)",
       }}
     >
-      <div className="absolute top-1.5 left-2 text-[16px] font-mono text-muted-foreground z-10 pointer-events-none bg-background/80 px-1 rounded">
+      <div className="absolute top-1.5 left-2 text-[16px] font-mono text-white z-10 pointer-events-none bg-black/85 px-1.5 py-0.5 rounded">
         {fmtVersionLabel(version)}
       </div>
       {!slice && !error && (
@@ -560,19 +626,17 @@ function drawCell(
   const childColor = "#94a3b8"; // slate-400
   const weakFill = "rgba(148, 163, 184, 0.04)";
 
-  // base 연도의 region sidocd (사용자가 조회한 지역의 시도).
-  //   level=sido: selections[0].code 자체가 sidocd
-  //   level=sgg:  selections[0].code 앞 2자리가 sidocd (복수 sgg 대부분 같은 sido)
-  const firstSel = query.selections[0];
-  const baseSidocd = firstSel
-    ? query.level === "sido"
-      ? firstSel.code
-      : firstSel.code.slice(0, 2)
-    : "";
-  // 이 slice 에 등장하는 sidocd 들에 파스텔 색 할당.
-  //   baseSidocd 는 항상 palette[0] (하늘색) 고정.
-  //   그 외 sidocd 는 등장 순서대로 palette[1..].
-  const sidoColorMap = assignSidoColors(slice, baseSidocd, names);
+  // 색 할당 기준:
+  //   level=sido → sidocd 기준. base sido 는 palette[0].
+  //   level=sgg  → sggcd 기준. base selection 의 각 sggcd 가 palette[0..N-1],
+  //                그 외 매칭된 sgg 는 palette[N..] 로 이어짐.
+  //   즉 "기준과 같은 행정구역이면 같은 색, 합병/분할/편입된 다른 구역은 다른 색".
+  const colorKey: "sido" | "sgg" = query.level === "sido" ? "sido" : "sgg";
+  const baseKeys: string[] =
+    colorKey === "sido"
+      ? query.selections.map((s) => s.code)
+      : query.selections.map((s) => s.code);
+  const colorMap = assignColors(slice, colorKey, baseKeys, names);
 
   // children 먼저. weight 기준으로 fill 결정.
   for (const g of slice.groups) {
@@ -582,8 +646,11 @@ function drawCell(
       const w = cws?.[i] ?? 0;
       let fillColor: string | null;
       if (w >= 0.9) {
-        const sidocd = sidocdOf(c.code, "emd", names);
-        fillColor = sidoColorMap.get(sidocd) ?? PASTEL_PALETTE[0]!;
+        const key =
+          colorKey === "sido"
+            ? sidocdOf(c.code, "emd", names)
+            : sggcdOf(c.code, "emd", names);
+        fillColor = colorMap.get(key) ?? PASTEL_PALETTE[0]!;
       } else {
         fillColor = weakFill;
       }
@@ -898,30 +965,48 @@ function approxArea(geom: DecodedGeometry): number {
   return (maxX - minX) * (maxY - minY);
 }
 
-/** slice 에 등장하는 sidocd 들에 PASTEL_PALETTE 색 할당.
- *  baseSidocd 는 항상 palette[0] 으로 앵커링 (일관된 색으로 base 영역 식별).
- *  그 외 sidocd 는 등장 순서대로 palette[1..]. */
-function assignSidoColors(
+/** slice 의 parent/children 에 등장하는 (sido 또는 sgg) 코드에 파스텔 색 할당.
+ *  baseKeys 순서대로 palette[0..N-1] 에 앵커링하고, 그 외 코드는 등장 순서로 이어짐.
+ *  level=sido 조회: baseKeys = [sidocd]. level=sgg 조회: baseKeys = [sggcd, ...]. */
+function assignColors(
   slice: TimelineSlice,
-  baseSidocd: string,
+  colorKey: "sido" | "sgg",
+  baseKeys: string[],
   names: NameMaps | null,
 ): Map<string, string> {
   const out = new Map<string, string>();
-  out.set(baseSidocd, PASTEL_PALETTE[0]!);
-  let idx = 1;
-  const assign = (sidocd: string) => {
-    if (out.has(sidocd)) return;
-    out.set(sidocd, PASTEL_PALETTE[idx % PASTEL_PALETTE.length]!);
+  const usedHues: number[] = []; // 이미 쓴 hue 들 (충돌 회피용)
+  // 1) 기준 선택은 여러 개든 모두 palette[0] (같은 조회 대상이므로 같은 색).
+  for (const k of baseKeys) {
+    if (!out.has(k)) out.set(k, PASTEL_PALETTE[0]!);
+  }
+  if (baseKeys.length > 0) usedHues.push(PASTEL_HUES[0]!);
+
+  let idx = 1; // base 는 palette[0] 을 통째로 가져갔으므로 다음은 [1] 부터.
+  const assign = (key: string) => {
+    if (out.has(key)) return;
+    let color: string;
+    if (idx < PASTEL_PALETTE.length) {
+      color = PASTEL_PALETTE[idx]!;
+      usedHues.push(PASTEL_HUES[idx]!);
+    } else {
+      color = pastelFromKeyUnique(key, usedHues);
+    }
+    out.set(key, color);
     idx += 1;
   };
-  // 먼저 parent 에서 등장한 순서대로 (매칭 weight 내림차순 정렬되어 있음).
+
+  const keyOf = (code: string, level: "sido" | "sgg" | "emd"): string =>
+    colorKey === "sido" ? sidocdOf(code, level, names) : sggcdOf(code, level, names);
+
+  // 2) parent 에서 등장한 순 (매칭 weight 내림차순 정렬되어 있음).
   for (const g of slice.groups) {
-    assign(sidocdOf(g.parent.code, g.parent.level, names));
+    assign(keyOf(g.parent.code, g.parent.level));
   }
-  // children 에도 parent 와 다른 sidocd 가 있을 수 있음 (드물지만 가능).
+  // 3) children (parent 와 다른 key 일 수 있음).
   for (const g of slice.groups) {
     for (const c of g.children) {
-      assign(sidocdOf(c.code, c.level, names));
+      assign(keyOf(c.code, c.level));
     }
   }
   return out;
@@ -951,6 +1036,32 @@ function sidocdOf(
     return `name:${sido}`;
   }
   return code.length >= 2 ? code.slice(0, 2) : code;
+}
+
+/** feature 의 code + level 에서 sggcd 를 유도.
+ *  - names 에 등록된 경우: row.sggcd 우선 (emd row 에 있음)
+ *  - 아니면 code 앞 5자리 (sgg 면 자기 자신, emd 면 emd[:5])
+ *  - surrogate "name:sidonm|sggnm|..." 이면 sggnm 까지 잘라낸 "name:sidonm|sggnm" */
+function sggcdOf(
+  code: string,
+  level: "sido" | "sgg" | "emd",
+  names: NameMaps | null,
+): string {
+  if (level === "sido") return code; // sido level 에선 sgg 분해 불가 — sido code 그대로 반환.
+  if (level === "sgg") return code;
+  // level === "emd"
+  if (names) {
+    const row = names.emd.get(code);
+    if (row?.sggcd) return row.sggcd;
+  }
+  if (code.startsWith("name:")) {
+    // "name:sido|sgg|emd" → "name:sido|sgg"
+    const rest = code.slice(5);
+    const parts = rest.split("|");
+    const joined = parts.slice(0, 2).join("|");
+    return `name:${joined}`;
+  }
+  return code.length >= 5 ? code.slice(0, 5) : code;
 }
 
 /** sidocd -> sidonm. names 에서 lookup. 없으면 null. */

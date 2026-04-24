@@ -6,7 +6,8 @@ import { SearchPanel } from "@/components/search/search-panel";
 import { TimelinePanel } from "@/components/search/timeline-panel";
 import { cn } from "@/lib/cn";
 
-const WIDTH = 360;
+const WIDTH_SEARCH = 360;
+const WIDTH_TIMELINE = 280;
 
 export function RightPanel() {
   const isOpen = useAppStore((s) => s.isRightPanelOpen);
@@ -14,13 +15,14 @@ export function RightPanel() {
   const tab = useAppStore((s) => s.rightPanelTab);
   const setTab = useAppStore((s) => s.setRightPanelTab);
   const setTimelineViewActive = useAppStore((s) => s.setTimelineViewActive);
+  const width = tab === "timeline" ? WIDTH_TIMELINE : WIDTH_SEARCH;
 
   return (
     <div
       className="relative h-full border-l border-border bg-background transition-[width] duration-300 overflow-hidden shrink-0"
-      style={{ width: isOpen ? `${WIDTH}px` : "0px" }}
+      style={{ width: isOpen ? `${width}px` : "0px" }}
     >
-      <div className="h-full flex flex-col" style={{ width: WIDTH }}>
+      <div className="h-full flex flex-col" style={{ width }}>
         <div className="flex items-center justify-between px-2 py-2 border-b border-border gap-1">
           <div className="flex gap-0.5">
             <TabButton

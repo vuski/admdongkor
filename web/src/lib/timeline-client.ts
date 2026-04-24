@@ -132,37 +132,67 @@ function binKey(version: string, range: Range): string {
   return `${version}|${range.offset}-${range.length}`;
 }
 
+/** 한 번의 Range fetch. 짧게 온 응답은 에러로 취급. */
+async function fetchBinRangeOnce(
+  version: string,
+  range: Range,
+): Promise<ArrayBuffer> {
+  const url = `${TIMELINE_BASE}/v/${version}/geom.bin`;
+  const end = range.offset + range.length - 1;
+  const r = await fetch(url, {
+    headers: { Range: `bytes=${range.offset}-${end}` },
+    cache: "no-store",
+  });
+  if (r.status !== 206 && r.status !== 200) {
+    throw new Error(`geom ${version} ${r.status}`);
+  }
+  const buf = await r.arrayBuffer();
+  let sliced: ArrayBuffer;
+  if (r.status === 200 && buf.byteLength > range.length) {
+    sliced = buf.slice(range.offset, range.offset + range.length);
+  } else {
+    sliced = buf;
+  }
+  if (sliced.byteLength < range.length) {
+    throw new Error(
+      `geom ${version} range truncated: expected ${range.length}, got ${sliced.byteLength} (status ${r.status})`,
+    );
+  }
+  return sliced;
+}
+
 export function fetchBinRange(
   version: string,
   range: Range,
 ): Promise<ArrayBuffer> {
   if (range.length === 0) return Promise.resolve(new ArrayBuffer(0));
   const key = binKey(version, range);
-  let p = binCache.get(key);
-  if (p) return p;
-  const url = `${TIMELINE_BASE}/v/${version}/geom.bin`;
-  const end = range.offset + range.length - 1;
-  p = fetch(url, { headers: { Range: `bytes=${range.offset}-${end}` } })
-    .then(async (r) => {
-      if (r.status !== 206 && r.status !== 200) {
-        throw new Error(`geom ${version} ${r.status}`);
+  const cached = binCache.get(key);
+  if (cached) return cached;
+  // 최대 3회 재시도. 통신이 짧게 오면 한 번 더. 각각 짧은 backoff.
+  const p = (async () => {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await fetchBinRangeOnce(version, range);
+      } catch (e) {
+        lastErr = e;
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
+        }
       }
-      const buf = await r.arrayBuffer();
-      // 200 으로 전체가 내려온 경우 잘라냄 (hosting 이 Range 지원 안 할 때).
-      if (r.status === 200 && buf.byteLength > range.length) {
-        return buf.slice(range.offset, range.offset + range.length);
-      }
-      return buf;
-    })
-    .catch((e) => {
-      binCache.delete(key);
-      throw e;
-    });
+    }
+    throw lastErr;
+  })();
   binCache.set(key, p);
+  // 최종 실패 시 캐시에서 제거.
+  p.catch(() => {
+    if (binCache.get(key) === p) binCache.delete(key);
+  });
   return p;
 }
 
-/** level 의 code 하나를 geometry 로. */
+/** level 의 code 하나를 geometry 로. 실패 시 null. */
 async function fetchFeature(
   version: string,
   meta: VersionMeta,
@@ -176,8 +206,13 @@ async function fetchFeature(
         ? meta.sgg.get(code)
         : meta.emd.get(code);
   if (!rng) return null;
-  const buf = await fetchBinRange(version, rng);
-  return { code, level, geometry: decodeWKB(buf, 0) };
+  try {
+    const buf = await fetchBinRange(version, rng);
+    return { code, level, geometry: decodeWKB(buf, 0) };
+  } catch (e) {
+    console.warn(`[timeline] fetchFeature ${version}/${level}/${code} failed:`, e);
+    return null;
+  }
 }
 
 /** 여러 code 를 batch range (min offset ~ max offset+length) 로 한 번에 fetch.
@@ -201,16 +236,30 @@ async function fetchFeaturesBatch(
     const end = r.offset + r.length;
     if (end > maxEnd) maxEnd = end;
   }
-  const blob = await fetchBinRange(version, {
-    offset: minOff,
-    length: maxEnd - minOff,
-  });
+  let blob: ArrayBuffer;
+  try {
+    blob = await fetchBinRange(version, {
+      offset: minOff,
+      length: maxEnd - minOff,
+    });
+  } catch (e) {
+    console.warn(`[timeline] fetchFeaturesBatch ${version}/${level} failed:`, e);
+    return [];
+  }
   const out: TimelineFeature[] = [];
   for (let i = 0; i < codes.length; i++) {
     const r = ranges[i];
     if (!r) continue;
-    const geom = decodeWKB(blob, r.offset - minOff);
-    out.push({ code: codes[i]!, level, geometry: geom });
+    // 개별 feature 의 WKB 가 잘린 경우 전체가 아닌 그 feature 만 skip.
+    try {
+      const geom = decodeWKB(blob, r.offset - minOff);
+      out.push({ code: codes[i]!, level, geometry: geom });
+    } catch (e) {
+      console.warn(
+        `[timeline] decodeWKB ${version}/${level}/${codes[i]} failed:`,
+        e,
+      );
+    }
   }
   return out;
 }

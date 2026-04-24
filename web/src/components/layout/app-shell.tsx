@@ -36,7 +36,7 @@ export function AppShell() {
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <SidebarPanel />
-      <div className="relative flex-1 h-full">
+      <div className="relative flex-1 h-full min-w-0">
         {!isSidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
