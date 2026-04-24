@@ -1,33 +1,27 @@
 """전체 파이프라인 래퍼 — 새 버전 추가 시 한 번에 돌리는 관리자 스크립트.
 
+GeoJSON → parquet 변환(이전의 Phase 1)은 **preprocessing 레포**에서 수행한다.
+admdongkor 는 parquet 가 `parquet/{emd,sgg,sido}_<version>.parquet` 에 이미
+있다는 전제로 그 이후 산출물(인덱스/시계열/embed)만 빌드한다.
+
 4개월 주기 신규 배포 프로세스:
-    1. raw/geojson/<YYYYMMDD>/*.geojson 배치
-    2. python scripts/admin/rebuild_all.py --version <YYYYMMDD>
+    1. preprocessing 에서 geojson → parquet 생성 (adk-master/preprocessing/...)
+    2. python scripts/admin/rebuild_all.py
 
 단계:
-    Phase 1: GeoJSON → parquet/{emd,sgg,sido}_<version>.parquet
-    Phase 2: admdongkor._index.parquet 재빌드 (find() 용)
+    Phase 2: _versions.py 재생성 + admdongkor._index.parquet 재빌드 (find() 용)
     Phase 3: 시계열 shape 인덱스 재빌드 (timeline + shape_pairs) × sido/sgg/emd
-    Phase 4: 인덱스 산출물을 parquet/ 로 이동
+    Phase 4: 인덱스 산출물을 lib/src/admdongkor/data/ 로 배포 (wheel embed)
 
 옵션:
-    --version YYYYMMDD    처리할 새 버전. 여러 개 공백 구분
-    --skip-phase1         parquet 이 이미 있으면 phase1 건너뛰기
-    --only-phase N        특정 phase 만 (1/2/3/4). 0 은 _versions.py 만 재생성
-    --workers N           병렬 워커 수 (기본 50)
-    --dry-run             실행 계획만 출력
-
-단계:
-    Phase 1: GeoJSON → parquet/{emd,sgg,sido}_<version>.parquet
-    Phase 2: _versions.py 재생성 + admdongkor._index.parquet 재빌드
-    Phase 3: 시계열 shape 인덱스 재빌드
-    Phase 4: 인덱스 산출물 parquet/ 로 이동
+    --only-phase N    특정 phase 만 (2/3/4)
+    --workers N       병렬 워커 수 (기본 50)
+    --dry-run         실행 계획만 출력
 
 사용 예:
-    python scripts/admin/rebuild_all.py --version 20260501
-    python scripts/admin/rebuild_all.py --version 20260501 20260901
+    python scripts/admin/rebuild_all.py
     python scripts/admin/rebuild_all.py --only-phase 3
-    python scripts/admin/rebuild_all.py --skip-phase1 --dry-run
+    python scripts/admin/rebuild_all.py --dry-run
 """
 
 from __future__ import annotations
@@ -88,16 +82,6 @@ def run(cmd: list[str], dry_run: bool = False) -> int:
     if dry_run:
         return 0
     return subprocess.call([str(c) for c in cmd])
-
-
-def phase1_build_parquets(versions: list[str], dry_run: bool) -> None:
-    """GeoJSON → 통일 parquet 변환."""
-    print("\n=== PHASE 1: GeoJSON -> parquet ===", flush=True)
-    script = ADMIN_DIR / "build_unified_parquet.py"
-    for v in versions:
-        rc = run([PYTHON, script, "--version", v], dry_run=dry_run)
-        if rc != 0:
-            raise RuntimeError(f"phase1 failed for version {v} (rc={rc})")
 
 
 def phase2_build_find_index(dry_run: bool) -> None:
@@ -176,30 +160,16 @@ def phase4_move_indexes(dry_run: bool) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--version", nargs="*", default=[],
-                    help="처리할 새 버전 YYYYMMDD. phase1 에 전달")
-    ap.add_argument("--skip-phase1", action="store_true")
-    ap.add_argument("--only-phase", type=int, choices=[1, 2, 3, 4])
+    ap.add_argument("--only-phase", type=int, choices=[2, 3, 4])
     ap.add_argument("--workers", type=int, default=50)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     t0 = time.perf_counter()
 
-    phases = {1, 2, 3, 4}
+    phases = {2, 3, 4}
     if args.only_phase:
         phases = {args.only_phase}
-    if args.skip_phase1:
-        phases.discard(1)
-
-    if 1 in phases:
-        if not args.version:
-            if args.only_phase == 1:
-                print("ERROR: phase 1 에는 --version 필수", flush=True)
-                return 1
-            print("skip phase 1: --version 없음", flush=True)
-        else:
-            phase1_build_parquets(args.version, args.dry_run)
 
     if 2 in phases:
         phase2_build_find_index(args.dry_run)
