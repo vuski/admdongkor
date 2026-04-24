@@ -132,13 +132,23 @@ export function TimelinePanel() {
   const setTimelineViewActive = useAppStore((s) => s.setTimelineViewActive);
 
   // 기본 체크 연도: 컴포넌트 처음 로드되고 allVersions 가 생겼을 때만 한 번.
+  //   기준 버전이 기본 5년 간격에 안 걸리면 별도로 추가해 반드시 포함.
   const [versionsInitialized, setVersionsInitialized] = useState(false);
   useEffect(() => {
     if (!versionsInitialized && allVersions.length > 0) {
-      setSelectedVersions(pickDefaultVersions(allVersions, 5));
+      setSelectedVersions(pickDefaultVersions(allVersions, 5, baseVersion));
       setVersionsInitialized(true);
     }
-  }, [allVersions, versionsInitialized, setSelectedVersions]);
+  }, [allVersions, versionsInitialized, baseVersion, setSelectedVersions]);
+
+  // 기준 버전을 바꿨는데 현재 체크리스트에 없으면 자동 체크. (이미 있는 선택은 건드리지 않음.)
+  useEffect(() => {
+    if (!versionsInitialized) return;
+    if (!allVersions.includes(baseVersion)) return;
+    if (!selectedVersions.includes(baseVersion)) {
+      toggleVersion(baseVersion);
+    }
+  }, [baseVersion, versionsInitialized, allVersions, selectedVersions, toggleVersion]);
 
   const canStart = selectedCodes.size > 0 && selectedVersions.length > 0;
 
@@ -153,6 +163,10 @@ export function TimelinePanel() {
       selections.push(sel);
     }
     if (selections.length === 0) return;
+    // baseVersion 이 체크 안 되어 있으면 자동 추가.
+    if (!selectedVersions.includes(baseVersion) && allVersions.includes(baseVersion)) {
+      setSelectedVersions([...selectedVersions, baseVersion]);
+    }
     setQueryStore({
       baseVersion,
       level,
@@ -219,6 +233,9 @@ export function TimelinePanel() {
         allVersions={allVersions}
         selected={selectedVersions}
         onToggle={toggleVersion}
+        onReset={() =>
+          setSelectedVersions(pickDefaultVersions(allVersions, 5, baseVersion))
+        }
       />
 
       <button
@@ -410,10 +427,12 @@ function YearPicker({
   allVersions,
   selected,
   onToggle,
+  onReset,
 }: {
   allVersions: string[];
   selected: string[];
   onToggle: (v: string) => void;
+  onReset: () => void;
 }) {
   const byYear = useMemo(() => {
     const m = new Map<number, string[]>();
@@ -432,7 +451,14 @@ function YearPicker({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-[10px] text-muted-foreground">
         <span>추적 대상 연도 ({selected.length})</span>
-        <span className="text-[9px]">기본: 5년 간격 + 최근</span>
+        <button
+          type="button"
+          onClick={onReset}
+          className="text-[9px] px-1.5 py-0.5 rounded border border-border hover:border-accent hover:text-accent transition"
+          title="기본 체크 상태로 재설정"
+        >
+          기본: 5년 간격 + 최근 + 기준연도
+        </button>
       </div>
       <div className="max-h-64 overflow-y-auto border border-border rounded-md divide-y divide-border">
         {years.map((y) => {

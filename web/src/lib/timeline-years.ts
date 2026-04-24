@@ -9,6 +9,7 @@ export function yearOf(versionKey: string): number {
 export function pickDefaultVersions(
   allVersions: string[],
   step = 5,
+  baseVersion?: string,
 ): string[] {
   if (allVersions.length === 0) return [];
   const sorted = [...allVersions].sort();
@@ -27,13 +28,10 @@ export function pickDefaultVersions(
 
   const minYear = yearOf(sorted[0]!);
   const maxYear = yearOf(sorted[sorted.length - 1]!);
-  const startYear = Math.ceil(minYear / step) * step;
-  // 1975 부터 5년: 1975, 1980, ...
-  // startYear 계산이 1975 로 떨어지지 않는 경우 대비: minYear 가 1975 면 그대로.
   const origin = minYear;
   const picked = new Set<string>();
 
-  // 정렬된 basis: minYear 가 1975 이면 1975, 1980, ...
+  // 1975 부터 step 년 간격.
   for (let y = origin; y <= maxYear; y += step) {
     const v = lastOfYear.get(y);
     if (v) picked.add(v);
@@ -41,6 +39,9 @@ export function pickDefaultVersions(
 
   // 최근 버전 (전체 배열의 마지막) 도 강제 포함.
   picked.add(sorted[sorted.length - 1]!);
+
+  // 기준 버전은 반드시 포함.
+  if (baseVersion && sorted.includes(baseVersion)) picked.add(baseVersion);
 
   return [...picked].sort();
 }
