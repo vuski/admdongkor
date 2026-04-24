@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ViewStateChangeEvent } from "react-map-gl/maplibre";
 import { MapPane, type MapPaneHandle } from "./map-pane";
 import { useAppStore } from "@/stores/app-store";
@@ -41,11 +41,28 @@ export function MapContainer() {
     unsupported: compareUnsupported,
   } = useCompare(versionKey, versionKeyB, compareEnabled);
 
-  const emdDataA = a.layers.find((l) => l.level === "emd")?.data ?? null;
-  const emdDataB = b.layers.find((l) => l.level === "emd")?.data ?? null;
-  const diffLayersA = compareResult ? buildCompareLayers(compareResult, "A", emdDataA) : [];
-  const diffLayersB = compareResult ? buildCompareLayers(compareResult, "B", emdDataB) : [];
-  const diffSummary = compareResult ? getDiffSummary(compareResult) : null;
+  const emdDataA = useMemo(
+    () => a.layers.find((l) => l.level === "emd")?.data ?? null,
+    [a.layers],
+  );
+  const emdDataB = useMemo(
+    () => b.layers.find((l) => l.level === "emd")?.data ?? null,
+    [b.layers],
+  );
+  // 비교 하이라이트 레이어: compareResult + emdData 가 바뀔 때만 재빌드.
+  // split 드래그로 인한 리렌더에서는 참조가 그대로라 deck.gl 이 geometry 재업로드하지 않음.
+  const diffLayersA = useMemo(
+    () => (compareResult ? buildCompareLayers(compareResult, "A", emdDataA) : []),
+    [compareResult, emdDataA],
+  );
+  const diffLayersB = useMemo(
+    () => (compareResult ? buildCompareLayers(compareResult, "B", emdDataB) : []),
+    [compareResult, emdDataB],
+  );
+  const diffSummary = useMemo(
+    () => (compareResult ? getDiffSummary(compareResult) : null),
+    [compareResult],
+  );
 
   const [hover, setHover] = useState<HoverInfo | null>(null);
   const [diffWindowOpen, setDiffWindowOpen] = useState(true);
@@ -55,14 +72,17 @@ export function MapContainer() {
     if (compareDragging) setHover(null);
   }, [compareDragging]);
 
-  // drag 중에는 hover 콜백도 무시 (autoHighlight 유발 방지)
-  const onHoverGated = useCallback(
-    (info: HoverInfo | null) => {
-      if (compareDragging) return;
-      setHover(info);
-    },
-    [compareDragging],
-  );
+  // drag 중에도 onHoverGated 자체의 참조는 안정화 (deps 를 ref 로 읽음).
+  // 이 콜백이 매 렌더 새로 만들어지면 MapPane 의 boundaryLayers 가 useMemo 되더라도
+  // onHover 의존성이 흔들려 무효화되므로 반드시 안정 참조가 필요.
+  const compareDraggingRef = useRef(compareDragging);
+  useEffect(() => {
+    compareDraggingRef.current = compareDragging;
+  }, [compareDragging]);
+  const onHoverGated = useCallback((info: HoverInfo | null) => {
+    if (compareDraggingRef.current) return;
+    setHover(info);
+  }, []);
 
   // 비교 모드가 꺼지면 diff window 도 함께 닫고, 다시 켜질 때 자동으로 열리도록.
   useEffect(() => {
@@ -90,6 +110,20 @@ export function MapContainer() {
           flyToRequest.nameFields,
         ) ?? undefined;
       }
+
+      // 모바일에서는 방금 RightPanel 을 닫아 지도 컨테이너가 300ms transition 으로
+      // 확장되는 중. MapLibre 는 CSS transition 으로 인한 컨테이너 크기 변화를
+      // 자동 감지하지 못하고, fitBounds 는 호출 시점의 크기로 zoom 을 계산하므로
+      // transition 이 끝나기를 기다렸다가 resize 를 강제한 뒤 fitBounds 해야
+      // 원하는 영역이 정확히 프레임에 들어온다. PC(md 이상)에서는 패널 너비가
+      // 변하지 않으므로 대기 없이 즉시 실행.
+      const isMobile =
+        typeof window !== "undefined" &&
+        window.matchMedia("(max-width: 768px)").matches;
+      if (isMobile) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 320));
+      }
+      map.resize();
 
       if (bbox) {
         const [minLon, minLat, maxLon, maxLat] = bbox;
@@ -139,21 +173,39 @@ export function MapContainer() {
   const onMoveB = useCallback((e: ViewStateChangeEvent) => sync("B", e), [sync]);
 
   // compare 모드 진입 시 B 를 A 로 한 번 맞춤.
+  // B pane 은 compareMode true 로 되면서 방금 마운트되므로 첫 렌더 시에는
+  // paneB.current?.map 이 아직 null 이거나 MapLibre 내부가 준비 전일 수 있음.
+  // map 이 준비될 때까지 rAF 로 짧게 기다렸다가 1회 jumpTo.
   useEffect(() => {
     if (!compareMode) return;
-    const mapA = paneA.current?.map?.getMap();
-    const mapB = paneB.current?.map?.getMap();
-    if (!mapA || !mapB) return;
-    syncingRef.current = "A";
-    mapB.jumpTo({
-      center: mapA.getCenter(),
-      zoom: mapA.getZoom(),
-      bearing: mapA.getBearing(),
-      pitch: mapA.getPitch(),
-    });
-    queueMicrotask(() => {
-      syncingRef.current = null;
-    });
+    let cancelled = false;
+    let rafId = 0;
+
+    const tryAlign = () => {
+      if (cancelled) return;
+      const mapA = paneA.current?.map?.getMap();
+      const mapB = paneB.current?.map?.getMap();
+      if (!mapA || !mapB) {
+        rafId = requestAnimationFrame(tryAlign);
+        return;
+      }
+      syncingRef.current = "A";
+      mapB.jumpTo({
+        center: mapA.getCenter(),
+        zoom: mapA.getZoom(),
+        bearing: mapA.getBearing(),
+        pitch: mapA.getPitch(),
+      });
+      queueMicrotask(() => {
+        syncingRef.current = null;
+      });
+    };
+
+    tryAlign();
+    return () => {
+      cancelled = true;
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [compareMode]);
 
   // 각 pane 은 전체 container 를 꽉 채우게 렌더 → 두 지도의 절대 좌표가 일치.

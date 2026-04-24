@@ -101,6 +101,7 @@ function ResultsList({ rows, query }: { rows: FindRow[]; query: string }) {
   const setVersionKey = useAppStore((s) => s.setVersionKey);
   const setLevel = useAppStore((s) => s.setLevel);
   const requestFlyTo = useAppStore((s) => s.requestFlyTo);
+  const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
 
   if (!query.trim()) return null;
   if (grouped.length === 0) {
@@ -136,6 +137,12 @@ function ResultsList({ rows, query }: { rows: FindRow[]; query: string }) {
               if (g.level === "emd") {
                 if (g.name) nameFields["emdnm"] = g.name;
                 if (g.sggnm) nameFields["sggnm"] = g.sggnm;
+              }
+              // 모바일에서는 RightPanel 이 360px 차지해 지도 영역이 거의 0 이 됨.
+              // 이 상태에서 fitBounds 가 돌면 사용자는 효과를 못 보므로,
+              // 좁은 화면이면 패널을 닫아 지도가 보이게 한 뒤 flyTo 를 요청한다.
+              if (typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) {
+                setRightPanelOpen(false);
               }
               requestFlyTo({
                 codeField,

@@ -83,57 +83,59 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
   //   다른 레이어들은 pickable:false 라 hit-test 에서 스킵됨
   // - pickable 레이어는 fill 이 있어야 hit-test 가 잡히므로 현재 level 은 filled:true
   //   (선만 있으면 hover 영역이 선 위로만 제한돼 잡기 어려움)
-  const boundaryLayers = dataLayers.map(({ level: lv, data }) => {
-    const isCurrent = lv === level;
-    const pickable = isCurrent && !pickingDisabled;
-    return new GeoJsonLayer({
-      id: `adm-${side}-${lv}`,
-      data,
-      stroked: true,
-      filled: isCurrent || lv === "sido",
-      // 현재 level: hit-test 용 투명 fill. 단, sido 이면서 현재 level 이면 원래
-      // 팔레트 색 유지 (색이 사라지면 구분 불가).
-      getFillColor:
-        isCurrent && lv !== "sido" ? [0, 0, 0, 1] : fillPalette[lv],
-      getLineColor: linePalette[lv],
-      lineWidthUnits: "pixels",
-      getLineWidth: lineWidthForLevel(lv),
-      pickable,
-      autoHighlight: pickable,
-      highlightColor:
-        side === "A" ? [28, 112, 87, 80] : [194, 80, 15, 80],
-      onHover: pickable
-        ? (info) => {
-            if (!onHover) return;
-            if (!info.object) {
-              onHover(null);
-              return;
-            }
-            const props =
-              (info.object as { properties?: Record<string, unknown> })
-                .properties ?? {};
-            onHover({
-              side,
-              level: lv,
-              x: info.x,
-              y: info.y,
-              sidonm: (props.sidonm as string) ?? null,
-              sidocd: (props.sidocd as string) ?? null,
-              sggnm: (props.sggnm as string) ?? null,
-              sggcd: (props.sggcd as string) ?? null,
-              emdnm: (props.emdnm as string) ?? null,
-              emdcd: (props.emdcd as string) ?? null,
-              emd7: (props.emd7 as string) ?? null,
-              emd8: (props.emd8 as string) ?? null,
-              area:
-                typeof props.area === "number"
-                  ? (props.area as number)
-                  : undefined,
-            });
-          }
-        : undefined,
-    });
-  });
+  const boundaryLayers = useMemo(
+    () =>
+      dataLayers.map(({ level: lv, data }) => {
+        const isCurrent = lv === level;
+        const pickable = isCurrent && !pickingDisabled;
+        return new GeoJsonLayer({
+          id: `adm-${side}-${lv}`,
+          data,
+          stroked: true,
+          filled: isCurrent || lv === "sido",
+          getFillColor:
+            isCurrent && lv !== "sido" ? [0, 0, 0, 1] : fillPalette[lv],
+          getLineColor: linePalette[lv],
+          lineWidthUnits: "pixels",
+          getLineWidth: lineWidthForLevel(lv),
+          pickable,
+          autoHighlight: pickable,
+          highlightColor:
+            side === "A" ? [28, 112, 87, 80] : [194, 80, 15, 80],
+          onHover: pickable
+            ? (info) => {
+                if (!onHover) return;
+                if (!info.object) {
+                  onHover(null);
+                  return;
+                }
+                const props =
+                  (info.object as { properties?: Record<string, unknown> })
+                    .properties ?? {};
+                onHover({
+                  side,
+                  level: lv,
+                  x: info.x,
+                  y: info.y,
+                  sidonm: (props.sidonm as string) ?? null,
+                  sidocd: (props.sidocd as string) ?? null,
+                  sggnm: (props.sggnm as string) ?? null,
+                  sggcd: (props.sggcd as string) ?? null,
+                  emdnm: (props.emdnm as string) ?? null,
+                  emdcd: (props.emdcd as string) ?? null,
+                  emd7: (props.emd7 as string) ?? null,
+                  emd8: (props.emd8 as string) ?? null,
+                  area:
+                    typeof props.area === "number"
+                      ? (props.area as number)
+                      : undefined,
+                });
+              }
+            : undefined,
+        });
+      }),
+    [dataLayers, level, pickingDisabled, side, fillPalette, linePalette, onHover],
+  );
 
   // buildLabels (polylabel 포함) 는 data/level 변경 시에만 재계산.
   // zoom 변화마다 호출되지 않도록 useMemo 로 캐싱.
@@ -152,8 +154,13 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
     [showLabels, side, zoomInt, level, labelData],
   );
 
-  // diff 레이어는 경계선 위, 레이블 아래에 위치
-  const layers = [...boundaryLayers, ...extraLayers, ...labelLayers];
+  // diff 레이어는 경계선 위, 레이블 아래에 위치.
+  // split 드래그처럼 parent 가 자주 리렌더될 때 참조를 안정화 → DeckOverlay 의 setProps 가
+  // 실제로 바뀐 경우에만 발생.
+  const layers = useMemo(
+    () => [...boundaryLayers, ...extraLayers, ...labelLayers],
+    [boundaryLayers, extraLayers, labelLayers],
+  );
 
   const handleMove = useCallback(
     (e: ViewStateChangeEvent) => {
