@@ -12,7 +12,11 @@
 
 - 설치: `pip install admdongkor`
 - 자세한 사용법은 [lib/README.md](lib/README.md) 를 참고하세요.
-- examples/example.ipynb 를 구글 코랩에서 바로 실행해볼 수 있습니다.
+- 샘플 노트북: [examples/example.ipynb](examples/example.ipynb) — 설치 없이 구글 코랩에서 바로 실행해 볼 수 있습니다.
+
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vuski/admdongkor/blob/master/examples/example.ipynb)
+
+  배지를 누르면 코랩에서 노트북이 열립니다. 첫 셀이 `pip install admdongkor` + 한글 폰트 설치를 자동 처리하므로, 위에서 아래로 셀을 차례로 실행하면 1975~2026 시계열 지도·검색·매칭·diff 가 그대로 동작합니다.
 - 주요 기능:
   - `get()` — 특정 시점의 읍면동/시군구/시도 지도 불러오기 (원본 또는 light 단순화 버전)
   - `find()` — 행정구역명으로 시점 검색 (공백 토큰 수로 시도·시군구·읍면동 자동 추정)

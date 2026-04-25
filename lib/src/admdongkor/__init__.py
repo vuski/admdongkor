@@ -13,13 +13,14 @@ from .api import (
     get,
     get_list,
     match_adm,
+    report_issue,
     versions,
 )
 
 __version__ = "0.6.0"
 __all__ = [
     "get", "get_list", "versions", "find", "match_adm", "compare",
-    "changelog", "data_version", "cache_dir", "__version__",
+    "changelog", "data_version", "report_issue", "cache_dir", "__version__",
 ]
 
 # import 시 인덱스 최신화. 네트워크 실패는 조용히 넘어감 —

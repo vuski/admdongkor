@@ -205,6 +205,24 @@ adk.changelog()
 # 1  2026.04.20  1975 대전시 prefix 추가
 ```
 
+### `report_issue(*, open_browser=True) -> str`
+
+데이터 오류 신고용. GitHub 이슈 폼이 **환경 정보(라이브러리 버전, data_version, OS, Python)
+가 자동 첨부된 채로** 브라우저에서 열린다. 제목·본문은 GitHub 에디터에서 자유롭게 작성
+(마크다운, 이미지 드래그&드롭 등 그대로 사용). Submit 까지 완료해야 신고됨.
+
+```python
+adk.report_issue()
+# → 브라우저로 prefilled GitHub 이슈 폼 열림.
+# → 제목/본문 작성 → 'Submit' 클릭.
+
+adk.report_issue(open_browser=False)
+# → URL 만 출력 (헤드리스/SSH 환경).
+```
+
+GitHub 계정이 필요하다 (없으면 가입 후 사용). 라이브러리는 토큰을 다루지 않으므로
+자동 POST 는 하지 않는다 — 사용자가 직접 'Submit' 을 누른 시점에만 신고가 등록된다.
+
 ---
 
 ## 버전 키 규칙

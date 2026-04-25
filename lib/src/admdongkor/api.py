@@ -7,11 +7,13 @@ from typing import Literal
 import geopandas as gpd
 import pandas as pd
 
-from . import _cache, _compare, _index, _match
+from . import _cache, _compare, _index, _match, _report
 from ._cache import download_if_needed
 from ._compare import CompareResult
 from ._match import MatchResult
 from ._versions import VERSIONS
+
+report_issue = _report.report_issue
 
 Level = Literal["emd", "sgg", "sido"]
 _LEVELS: tuple[Level, ...] = ("emd", "sgg", "sido")

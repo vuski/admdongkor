@@ -42,14 +42,19 @@ CELLS = [
         "\n"
         "이 노트북은 Colab 에서 위 버튼으로 바로 열거나 로컬 Jupyter 에서 돌릴 수 있다.\n"
         "\n"
+        "v0.6.0 부터 검색·시계열 인덱스는 처음 `import admdongkor` 할 때 GitHub 에서\n"
+        "자동으로 다운로드되어 캐시된다 (~5.8MB). 데이터 수정(이름 정정 등)이 있을 때\n"
+        "`pip install -U` 없이도 다음 import 때 자동 반영된다.\n"
+        "\n"
         "**목차**\n"
         "1. 환경 준비 (설치 + 한글 폰트)\n"
-        "2. 버전 탐색 — `versions()`\n"
+        "2. 버전 탐색 — `versions()` / `data_version()` / `changelog()`\n"
         "3. 이름으로 찾기 — `find()`\n"
         "4. 지도 받기 — `get()` (EPSG:5179 기본 / WGS84 옵션)\n"
         "5. 영역 시계열 매칭 — `match_adm()`\n"
         "6. 두 시점 diff — `compare()`\n"
         "7. 실전 예: 인구 집계를 위한 코드 매핑\n"
+        "8. 데이터 오류 신고 — `report_issue()`\n"
     ),
     md("## 1. 환경 준비\n"),
     code(
@@ -89,16 +94,22 @@ CELLS = [
         "print('admdongkor version:', adk.__version__)\n"
     ),
     md(
-        "## 2. 버전 탐색 — `versions()`\n"
+        "## 2. 버전 탐색 — `versions()` / `data_version()` / `changelog()`\n"
         "\n"
-        "1975–2026 총 61 개 버전. `YYYY1231` (shapefile 기반, 1975-2015) 과\n"
-        "`YYYYMMDD` (GeoJSON 기반, 2012-2026) 두 포맷이 섞여 있다.\n"
+        "`versions()` 는 지도 시점 키 목록 (1975–2026, `YYYY1231` 포맷 1975-2015 + `YYYYMMDD` 포맷 2012-2026).\n"
+        "`data_version()` 은 현재 캐시에 들어있는 **인덱스의 데이터 버전**, `changelog()` 은\n"
+        "그 인덱스의 수정 이력을 보여준다.\n"
     ),
     code(
         "print('total:', len(adk.versions()))\n"
         "print('head :', adk.versions().head())\n"
         "print('tail :', adk.versions().tail())\n"
         "print('2023 :', adk.versions(2023))\n"
+    ),
+    code(
+        "# 현재 인덱스의 data_version + 수정 이력\n"
+        "print('data_version:', adk.data_version())\n"
+        "adk.changelog()\n"
     ),
     md("## 3. 이름으로 버전 찾기 — `find()`\n"),
     code(
@@ -248,6 +259,25 @@ CELLS = [
         "# 경북 소속(군위)만 골라보면\n"
         "only_gb = joined[joined.sidocd == '47']\n"
         "print(f'\\n그 중 경북(2011 군위) 기여: {only_gb.contrib.sum():,.0f} 명')\n"
+    ),
+    md(
+        "## 8. 데이터 오류 신고 — `report_issue()`\n"
+        "\n"
+        "지도/인덱스에서 잘못된 부분을 발견하면 한 줄로 GitHub 이슈를 열 수 있다.\n"
+        "환경 정보(`admdongkor` 버전, `data_version`, OS, Python) 가 자동으로 본문에\n"
+        "첨부되며, 제목·본문은 브라우저의 GitHub 에디터에서 직접 작성한다.\n"
+        "GitHub 계정이 필요하다.\n"
+    ),
+    code(
+        "# 실제 신고 시: adk.report_issue() — 브라우저가 자동으로 열림.\n"
+        "# 여기서는 open_browser=False 로 URL 만 받아 환경 정보 prefill 만 확인한다.\n"
+        "# (잘린 URL 을 클릭하는 사고를 막기 위해 URL 자체는 출력하지 않음.)\n"
+        "import urllib.parse\n"
+        "url = adk.report_issue(open_browser=False)\n"
+        "qs = urllib.parse.parse_qs(url.split('?', 1)[1])\n"
+        "print('--- labels ---'); print(qs['labels'][0])\n"
+        "print('--- body (decoded) ---'); print(qs['body'][0])\n"
+        "print(f'URL 길이: {len(url)} chars')\n"
     ),
     md(
         "---\n"

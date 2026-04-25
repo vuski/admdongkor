@@ -57,16 +57,27 @@ CELLS = [
         "matplotlib.rcParams['axes.unicode_minus'] = False\n"
         "print(f'matplotlib font: {matplotlib.rcParams[\"font.family\"]}')\n"
     ),
-    md_cell("## 1. 버전 & 캐시 위치 확인\n"),
+    md_cell(
+        "## 1. 버전 & 캐시 위치 확인\n"
+        "\n"
+        "v0.6.0 부터 인덱스 parquet 은 PyPI wheel 에 embed 되지 않고 import 시 GitHub\n"
+        "`dist/data/` 에서 자동 다운로드된다. `data_version()` 으로 현재 캐시된 인덱스의\n"
+        "버전, `changelog()` 으로 수정 이력을 볼 수 있다.\n"
+    ),
     code_cell(
         "import admdongkor as adk\n"
         "\n"
-        "print('version     :', adk.__version__)\n"
-        "print('cache dir   :', adk.cache_dir())\n"
-        "print('total keys  :', len(adk.get_list()))\n"
-        "print('first 3     :', adk.get_list()[:3])\n"
-        "print('last 3      :', adk.get_list()[-3:])\n"
-        "print('2025 keys   :', adk.get_list(year=2025))\n"
+        "print('lib version  :', adk.__version__)\n"
+        "print('data_version :', adk.data_version())\n"
+        "print('cache dir    :', adk.cache_dir())\n"
+        "print('total keys   :', len(adk.get_list()))\n"
+        "print('first 3      :', adk.get_list()[:3])\n"
+        "print('last 3       :', adk.get_list()[-3:])\n"
+        "print('2025 keys    :', adk.get_list(year=2025))\n"
+    ),
+    code_cell(
+        "# 인덱스 수정 이력 (manifest.json 의 history 필드)\n"
+        "adk.changelog()\n"
     ),
     md_cell("## 2. `find()` — 행정구역명으로 버전 검색\n"),
     code_cell(
@@ -189,7 +200,25 @@ CELLS = [
         "    rel = f.relative_to(adk.cache_dir())\n"
         "    print(f'  {f.stat().st_size / 1024 / 1024:6.2f} MB  {rel}')\n"
     ),
-    md_cell("## 7. 시계열 — 같은 지역을 여러 해 비교\n"),
+    md_cell(
+        "## 7. `report_issue()` — 데이터 오류 신고\n"
+        "\n"
+        "환경 정보(라이브러리 버전, data_version, OS, Python) 가 자동 첨부된 GitHub 이슈\n"
+        "폼을 브라우저로 연다. 제목·본문은 GitHub 에디터에서 작성. 여기서는 `open_browser=False`\n"
+        "로 URL 만 받아 검사.\n"
+    ),
+    code_cell(
+        "# 실제 신고 시 호출 형태: adk.report_issue() — 인자 없이.\n"
+        "# 여기서는 검증 차원에서 open_browser=False 로 URL 만 받아 decode 해 본다.\n"
+        "# (URL 자체를 출력하면 잘린 prefix 만 클릭해서 본문 빠진 채 폼이 열릴 수 있어 출력 X)\n"
+        "import urllib.parse\n"
+        "url = adk.report_issue(open_browser=False)\n"
+        "qs = urllib.parse.parse_qs(url.split('?', 1)[1])\n"
+        "print('--- labels ---'); print(qs['labels'][0])\n"
+        "print('--- body (decoded) ---'); print(qs['body'][0])\n"
+        "print(f'URL 길이: {len(url)} chars')\n"
+    ),
+    md_cell("## 8. 시계열 — 같은 지역을 여러 해 비교\n"),
     code_cell(
         "# 세종시가 들어간 연도들의 sido 지도. 2012 이전엔 충청남도로 포함됨\n"
         "import matplotlib.pyplot as plt\n"
