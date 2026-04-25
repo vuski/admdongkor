@@ -85,7 +85,7 @@ export async function find(
   const effectiveLevel = level ?? AUTO_LEVEL[tokens.length] ?? null;
   const needle = tokens.join("").toLowerCase();
 
-  const rows = await loadIndexFile<IndexRow>("_index.parquet", {
+  const rows = await loadIndexFile<IndexRow>("_index_v3.parquet", {
     baseUrl,
     fetch: fetchFn,
     signal,

@@ -29,3 +29,10 @@ export type {
   GetOptions,
   Level,
 } from "./types.js";
+export {
+  changelog,
+  dataVersion,
+  fetchManifest,
+  clearManifestCache,
+} from "./changelog.js";
+export type { ChangelogEntry, Manifest } from "./changelog.js";

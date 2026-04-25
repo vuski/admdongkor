@@ -1,8 +1,11 @@
 import { parquetReadObjects } from "hyparquet";
 import { compressors } from "hyparquet-compressors";
 
+// 인덱스 parquet 의 canonical URL. Python lib 과 동일 경로를 공유.
+// 이 URL 은 **영구 stable** — 옮기면 이미 배포된 번들이 전부 깨진다.
+// manifest.json 도 같은 경로에서 받는다 (changelog()).
 export const DEFAULT_INDEX_BASE =
-  "https://raw.githubusercontent.com/vuski/admdongkor/master/lib/src/admdongkor/data";
+  "https://raw.githubusercontent.com/vuski/admdongkor/master/dist/data";
 
 export interface LoaderOptions {
   baseUrl?: string;

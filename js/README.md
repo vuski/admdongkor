@@ -12,6 +12,8 @@ npm install admdongkor
 
 Node 18+ 필요 (글로벌 `fetch` 사용). 브라우저에서도 동작.
 
+> v0.2.0+ 부터 인덱스 parquet 은 `https://raw.githubusercontent.com/vuski/admdongkor/master/dist/data/` 에서 받아온다. 이 URL 과 파일명(`_index_v3.parquet`, `timeline_v3_*`, `shape_pairs_v3_*`) 은 **영구 stable** — 한 번 빌드·배포한 번들도 데이터 수정(예: 과거 시군구 이름 정정)을 자동으로 반영받는다. 스키마 변경이 필요하면 `v4_*` 처럼 새 파일명으로 병렬 추가되고, 구 번들은 영향받지 않는다.
+
 ## Quick Start
 
 ```ts
@@ -227,6 +229,32 @@ await m.sido(); // sido 단위 집계
 - **인구 재집계**: 2026 기준 통계를 2010 경계로 돌려 비교
 - **서비스 지역 마이그레이션**: 과거 배달/택시 서비스 영역을 현재 행정구역에 재매핑
 - **시계열 패널 데이터 정합**: 행정구역 통폐합으로 끊긴 시계열 이어붙이기
+
+---
+
+### `dataVersion(options?)` / `changelog(options?)`
+
+원격 인덱스의 **데이터 버전** + **수정 이력** 조회. 과거 행정경계 데이터는 오타·영역 정정 등이 계속 반영되므로, 이 API 로 "내 번들이 현재 어떤 버전의 데이터를 바라보는지" 확인할 수 있다.
+
+```ts
+import { dataVersion, changelog } from "admdongkor";
+
+await dataVersion();
+// "2026.04.25"
+
+await changelog();
+// [
+//   { version: "2026.04.25", changes: "1980 경상북도 대구시수성구 이름 수정" },
+//   { version: "2026.04.20", changes: "1975 대전시 prefix 추가" },
+//   ...
+// ]
+```
+
+둘 다 내부적으로 `manifest.json` 한 번만 fetch 하고 프로세스 메모리에 캐시. `clearManifestCache()` 로 해제.
+
+인덱스 parquet 자체는 canonical URL (`dist/data/`) 을 영구 stable 로 유지하므로, 번들을 한 번 빌드해 배포해두면 라이브러리 업그레이드 없이도 데이터 수정이 자동 반영된다 — 파이썬 `admdongkor` 0.6.0+ 과 같은 원리.
+
+> 스키마 변경 (예: `timeline_v3_*` → `v4_*`) 은 **새 파일명으로만 추가**되고 구 파일은 freeze 된다. 이미 배포된 번들은 빌드 시점의 스키마를 그대로 계속 바라봄 — 호환성 파괴 없음.
 
 ---
 
