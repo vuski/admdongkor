@@ -5,7 +5,10 @@ import { Loader2, X } from "lucide-react";
 import { matchAdm, VERSIONS } from "admdongkor";
 import polylabel from "@mapbox/polylabel";
 import { useAppStore } from "@/stores/app-store";
-import { useTimelineStore, type TimelineViewport } from "@/stores/timeline-store";
+import {
+  useTimelineStore,
+  type TimelineViewport,
+} from "@/stores/timeline-store";
 import {
   fetchBinRange,
   fetchMeta,
@@ -63,16 +66,33 @@ function hslToHex(h: number, s: number, l: number): string {
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const hp = h / 60;
   const x = c * (1 - Math.abs((hp % 2) - 1));
-  let r = 0, g = 0, b = 0;
-  if (hp < 1) { r = c; g = x; }
-  else if (hp < 2) { r = x; g = c; }
-  else if (hp < 3) { g = c; b = x; }
-  else if (hp < 4) { g = x; b = c; }
-  else if (hp < 5) { r = x; b = c; }
-  else { r = c; b = x; }
+  let r = 0,
+    g = 0,
+    b = 0;
+  if (hp < 1) {
+    r = c;
+    g = x;
+  } else if (hp < 2) {
+    r = x;
+    g = c;
+  } else if (hp < 3) {
+    g = c;
+    b = x;
+  } else if (hp < 4) {
+    g = x;
+    b = c;
+  } else if (hp < 5) {
+    r = x;
+    b = c;
+  } else {
+    r = c;
+    b = x;
+  }
   const m = l - c / 2;
   const toHex = (v: number) =>
-    Math.round((v + m) * 255).toString(16).padStart(2, "0");
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
@@ -85,7 +105,10 @@ function pastelFromKeyUnique(key: string, usedHues: number[]): string {
     const hue = (h0 + step * i) % 360;
     let ok = true;
     for (const u of usedHues) {
-      if (hueDist(hue, u) < HUE_MIN_GAP) { ok = false; break; }
+      if (hueDist(hue, u) < HUE_MIN_GAP) {
+        ok = false;
+        break;
+      }
     }
     if (ok) {
       usedHues.push(hue);
@@ -114,7 +137,9 @@ export function TimelineView() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
   // version -> NameMaps (라벨/색 할당용).
-  const [namesByVersion, setNamesByVersion] = useState<Map<string, NameMaps>>(new Map());
+  const [namesByVersion, setNamesByVersion] = useState<Map<string, NameMaps>>(
+    new Map(),
+  );
 
   // 쿼리/버전 변경 시 로드: 1) matchAdm 으로 각 target 의 매칭 코드 구함, 2) 코드들로 slice fetch.
   useEffect(() => {
@@ -157,7 +182,10 @@ export function TimelineView() {
 
     // base 자신도 matchAdm 의 target 으로 넣으면 weight=1 의 자기 자신 매칭이 나와 동일 로직으로 처리.
     const runMatch = async () => {
-      if (supportedTargets.length === 0 || !validVersions.has(query.baseVersion)) {
+      if (
+        supportedTargets.length === 0 ||
+        !validVersions.has(query.baseVersion)
+      ) {
         if (!validVersions.has(query.baseVersion)) {
           errs.set(query.baseVersion, "base version not in match index");
           setErrors(new Map(errs));
@@ -212,7 +240,10 @@ export function TimelineView() {
           Array<{ code: string; weight: number }>
         >();
         for (const [v, m] of sggWeightByVersion) {
-          const arr = [...m.entries()].map(([code, weight]) => ({ code, weight }));
+          const arr = [...m.entries()].map(([code, weight]) => ({
+            code,
+            weight,
+          }));
           arr.sort((a, b) => b.weight - a.weight);
           rowsByVersion.set(v, arr);
         }
@@ -280,7 +311,9 @@ export function TimelineView() {
       const geoms = await Promise.all(
         query.selections.map(async (sel) => {
           const entry =
-            query.level === "sido" ? meta.sido.get(sel.code) : meta.sgg.get(sel.code);
+            query.level === "sido"
+              ? meta.sido.get(sel.code)
+              : meta.sgg.get(sel.code);
           if (!entry) return null;
           const buf = await fetchBinRange(query.baseVersion, entry);
           return decodeWKB(buf, 0);
@@ -355,9 +388,10 @@ function Header({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold truncate">{title}</div>
         <div className="text-[10px] text-muted-foreground">
-          기준 {fmtVersionLabel(query.baseVersion)} · {query.level === "sido" ? "시도" : "시군구"}
-          {query.selections.length > 1 && ` ${query.selections.length}개`} · 연도 {count}개
-          ({loaded}/{count} 로드)
+          기준 {fmtVersionLabel(query.baseVersion)} ·{" "}
+          {query.level === "sido" ? "시도" : "시군구"}
+          {query.selections.length > 1 && ` ${query.selections.length}개`} ·
+          연도 {count}개 ({loaded}/{count} 로드)
           {loading && <span className="inline-block ml-1">· 로딩중</span>}
         </div>
       </div>
@@ -462,7 +496,16 @@ function TimelineCell({
       isBaseVersion,
       names,
     );
-  }, [slice, viewport, query, width, showLabels, baseGeometries, isBaseVersion, names]);
+  }, [
+    slice,
+    viewport,
+    query,
+    width,
+    showLabels,
+    baseGeometries,
+    isBaseVersion,
+    names,
+  ]);
 
   // wheel: 줌. pointer drag: 팬.
   // 주의: viewport 를 closure 에 캡처하지 않는다 — store 에서 매번 최신값을 읽어야
@@ -624,7 +667,7 @@ function drawCell(
   const childLineWidth = 0.6;
   const parentColor = "#1e293b"; // slate-800
   const childColor = "#94a3b8"; // slate-400
-  const weakFill = "rgba(148, 163, 184, 0.04)";
+  const weakFill = "rgba(148, 163, 184, 0.30)";
 
   // 색 할당 기준:
   //   level=sido → sidocd 기준. base sido 는 palette[0].
@@ -776,7 +819,10 @@ function featureLabelPos(geom: DecodedGeometry): [number, number] {
   for (const poly of geom.coordinates) {
     const outer = poly[0];
     if (!outer) continue;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
     for (const [x, y] of outer) {
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
@@ -949,7 +995,10 @@ function shoelace(ring: number[][]): number {
 }
 
 function approxArea(geom: DecodedGeometry): number {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
   for (const poly of polys) {
     const outer = poly[0];
@@ -997,7 +1046,9 @@ function assignColors(
   };
 
   const keyOf = (code: string, level: "sido" | "sgg" | "emd"): string =>
-    colorKey === "sido" ? sidocdOf(code, level, names) : sggcdOf(code, level, names);
+    colorKey === "sido"
+      ? sidocdOf(code, level, names)
+      : sggcdOf(code, level, names);
 
   // 2) parent 에서 등장한 순 (매칭 weight 내림차순 정렬되어 있음).
   for (const g of slice.groups) {

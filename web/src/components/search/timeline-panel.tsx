@@ -41,9 +41,9 @@ export function TimelinePanel() {
   const [searchErr, setSearchErr] = useState<string | null>(null);
   const [results, setResults] = useState<Candidate[]>([]);
   /** 코드 -> {name, sidonm?} 캐시 (선택된 것들 이름 표시용). */
-  const [nameMap, setNameMap] = useState<Map<string, { name: string; sidonm?: string }>>(
-    new Map(),
-  );
+  const [nameMap, setNameMap] = useState<
+    Map<string, { name: string; sidonm?: string }>
+  >(new Map());
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
 
   // 레벨 바뀌면 선택/검색 결과 초기화.
@@ -148,7 +148,13 @@ export function TimelinePanel() {
     if (!selectedVersions.includes(baseVersion)) {
       toggleVersion(baseVersion);
     }
-  }, [baseVersion, versionsInitialized, allVersions, selectedVersions, toggleVersion]);
+  }, [
+    baseVersion,
+    versionsInitialized,
+    allVersions,
+    selectedVersions,
+    toggleVersion,
+  ]);
 
   const canStart = selectedCodes.size > 0 && selectedVersions.length > 0;
 
@@ -164,7 +170,10 @@ export function TimelinePanel() {
     }
     if (selections.length === 0) return;
     // baseVersion 이 체크 안 되어 있으면 자동 추가.
-    if (!selectedVersions.includes(baseVersion) && allVersions.includes(baseVersion)) {
+    if (
+      !selectedVersions.includes(baseVersion) &&
+      allVersions.includes(baseVersion)
+    ) {
       setSelectedVersions([...selectedVersions, baseVersion]);
     }
     setQueryStore({
@@ -252,6 +261,11 @@ export function TimelinePanel() {
         <Play className="h-3.5 w-3.5" />
         시계열 추적 시작
       </button>
+
+      <p className="text-[11px] leading-snug text-rose-700/90 bg-rose-50 border border-rose-200 rounded-md px-2 py-1.5">
+        지도에 보이는 <span className="font-medium">붉은 색 경계</span>는
+        기준연도의 선택 행정구역 영역에 해당합니다.
+      </p>
     </div>
   );
 }
@@ -350,7 +364,10 @@ function ResultList({
                 )}
               >
                 {on && (
-                  <svg viewBox="0 0 10 10" className="w-2.5 h-2.5 text-accent-foreground">
+                  <svg
+                    viewBox="0 0 10 10"
+                    className="w-2.5 h-2.5 text-accent-foreground"
+                  >
                     <path
                       d="M1.5 5l2 2 5-5"
                       stroke="currentColor"
@@ -399,7 +416,9 @@ function SelectedChips({
   return (
     <div className="border border-accent/50 bg-accent/5 rounded-md p-2 text-xs space-y-1">
       <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
-        <span>선택 {codes.length}개 · 기준 {fmtVersionLabel(baseVersion)}</span>
+        <span>
+          선택 {codes.length}개 · 기준 {fmtVersionLabel(baseVersion)}
+        </span>
         <button
           type="button"
           onClick={onClearAll}
@@ -455,7 +474,10 @@ function YearPicker({
     return m;
   }, [allVersions]);
 
-  const years = useMemo(() => [...byYear.keys()].sort((a, b) => a - b), [byYear]);
+  const years = useMemo(
+    () => [...byYear.keys()].sort((a, b) => a - b),
+    [byYear],
+  );
 
   return (
     <div className="space-y-1.5">
@@ -475,7 +497,9 @@ function YearPicker({
           const vs = byYear.get(y)!;
           return (
             <div key={y} className="px-2 py-1.5">
-              <div className="text-[10px] font-mono text-muted-foreground mb-0.5">{y}</div>
+              <div className="text-[10px] font-mono text-muted-foreground mb-0.5">
+                {y}
+              </div>
               <div className="flex flex-wrap gap-1">
                 {vs.map((v) => {
                   const on = selected.includes(v);
