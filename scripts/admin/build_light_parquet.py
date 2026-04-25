@@ -35,6 +35,17 @@ HOLE_THRESHOLD_KM2 = 1.0
 # 1 km² → 제곱도 (중위도 약 37°N 기준 대략치)
 HOLE_THRESHOLD_DEG2 = 1e6 / (111_000**2 * 0.8)
 
+# preprocessing/scripts/rebuild_sgg_sido.py 와 동일한 정책.
+# 같은 sggcd 안에 sggnm 이 둘 이상 공존하는 의도된 케이스 화이트리스트.
+# 등재된 (key, sggcd) 는 dissolve 키가 (sggcd, sggnm) 으로 바뀌어
+# 같은 sggcd 안에서도 이름별 별도 행으로 분리된다.
+# 2000-2002 충북: 43760(괴산군) 안에 "괴산군" + "증평출장소" 공존.
+SGG_SPLIT_WHITELIST: set[tuple[str, str]] = {
+    ("20001231", "43760"),
+    ("20011231", "43760"),
+    ("20021231", "43760"),
+}
+
 
 def _remove_small_holes(geom, thresh: float):
     if geom is None or geom.is_empty:
@@ -95,11 +106,34 @@ def process_version(version: str) -> tuple[str, int, int, int, float]:
     # 서로 다른 시도에서 합쳐지지 않게 한다.
     has_sgg_code = emd_s["sggcd"].notna().any()
     if has_sgg_code:
-        sgg = emd_s.dissolve(
-            by="sggcd",
-            aggfunc={"sggnm": "first", "sidocd": "first",
-                     "sidonm": "first", "area": "sum"},
-        ).reset_index()
+        # 화이트리스트 sggcd 는 (sggcd, sggnm) 조합으로 분리, 나머지는 sggcd 단독.
+        split_codes = {sggcd for k, sggcd in SGG_SPLIT_WHITELIST if k == version}
+        if split_codes:
+            split_mask = emd_s["sggcd"].isin(split_codes)
+            normal = emd_s[~split_mask]
+            split_part = emd_s[split_mask]
+            parts = []
+            if not normal.empty:
+                d1 = normal.dissolve(
+                    by="sggcd",
+                    aggfunc={"sggnm": "first", "sidocd": "first",
+                             "sidonm": "first", "area": "sum"},
+                ).reset_index()
+                parts.append(d1)
+            if not split_part.empty:
+                d2 = split_part.dissolve(
+                    by=["sggcd", "sggnm"],
+                    aggfunc={"sidocd": "first",
+                             "sidonm": "first", "area": "sum"},
+                ).reset_index()
+                parts.append(d2)
+            sgg = pd.concat(parts, ignore_index=True)
+        else:
+            sgg = emd_s.dissolve(
+                by="sggcd",
+                aggfunc={"sggnm": "first", "sidocd": "first",
+                         "sidonm": "first", "area": "sum"},
+            ).reset_index()
     else:
         # 코드가 없는 옛 버전: 이름으로 dissolve. sggcd/sidocd 는 NaN 으로 둠.
         sgg = emd_s.dissolve(
