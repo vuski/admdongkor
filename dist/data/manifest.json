@@ -1,0 +1,46 @@
+{
+  "data_version": "2026.04.25",
+  "schema_version": "v3",
+  "min_lib_version": "0.6.0",
+  "created_at": "2026-04-25T03:16:19Z",
+  "history": [
+    {
+      "version": "2026.04.25",
+      "changes": "1980 sgg 이름 정정 (대구시 prefix 추가: 37011~37016 중구/동구/서구/남구/북구/수성구)"
+    }
+  ],
+  "files": {
+    "_index.parquet": {
+      "size": 1834426,
+      "sha256": "998f8b0652fb392afdaf70309734fa9fe32031e5029cdbf939aaa4b34d6d76d5"
+    },
+    "_index_v3.parquet": {
+      "size": 1834426,
+      "sha256": "998f8b0652fb392afdaf70309734fa9fe32031e5029cdbf939aaa4b34d6d76d5"
+    },
+    "timeline_v3_sido.parquet": {
+      "size": 10218,
+      "sha256": "91dcb977cd4469c6fdaa2a19f9e640516576a6bf8d61dbe91c7ed35b049e1efb"
+    },
+    "timeline_v3_sgg.parquet": {
+      "size": 100615,
+      "sha256": "932dea5f3c94458a35a5daa75c145550fbfff16d4fde2aa7f2ec24bfd7c0c86c"
+    },
+    "timeline_v3_emd.parquet": {
+      "size": 1547543,
+      "sha256": "d436f54e9c1a07b4b3fded7d8fa6b2a77ed4d1f7071cf1e73b5c98c4ebfbe922"
+    },
+    "shape_pairs_v3_sido.parquet": {
+      "size": 14013,
+      "sha256": "7540b7ecccf6c231569c5201a485d2d821f7b33cd7dc4b7ac05764321c184d92"
+    },
+    "shape_pairs_v3_sgg.parquet": {
+      "size": 92968,
+      "sha256": "c30d89465f29af4dc2b6ae4a1789e191b1d0b0a7a5009ff0f271005579e5cb9a"
+    },
+    "shape_pairs_v3_emd.parquet": {
+      "size": 2167372,
+      "sha256": "6ca401b4b82fe7465198cb90b923279e0520fdba78c8a5f030ffcf79566a2689"
+    }
+  }
+}
