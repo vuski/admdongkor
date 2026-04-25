@@ -2,16 +2,22 @@
 
 GeoJSON → parquet 변환(이전의 Phase 1)은 **preprocessing 레포**에서 수행한다.
 admdongkor 는 parquet 가 `parquet/{emd,sgg,sido}_<version>.parquet` 에 이미
-있다는 전제로 그 이후 산출물(인덱스/시계열/embed)만 빌드한다.
+있다는 전제로 그 이후 산출물(인덱스/시계열)만 빌드한다.
+
+0.6.0 부터 인덱스 parquet 은 PyPI wheel 에 embed 되지 않고 `dist/data/` 로
+publish 해서 GitHub raw 로 서빙한다. 그 publish 단계는 별도 스크립트
+`scripts/admin/publish_data.py` 가 맡는다 (이 래퍼 다음에 수동 실행).
 
 4개월 주기 신규 배포 프로세스:
     1. preprocessing 에서 geojson → parquet 생성 (adk-master/preprocessing/...)
     2. python scripts/admin/rebuild_all.py
+    3. python scripts/admin/publish_data.py --changes "..."
+    4. git add dist/data/ && git commit && git push
 
-단계:
-    Phase 2: _versions.py 재생성 + admdongkor._index.parquet 재빌드 (find() 용)
+단계 (이 스크립트가 맡는 부분):
+    Phase 2: _versions.py 재생성 + _index.parquet 재빌드 (+_index_v3.parquet 별칭 생성)
     Phase 3: 시계열 shape 인덱스 재빌드 (timeline + shape_pairs) × sido/sgg/emd
-    Phase 4: 인덱스 산출물을 lib/src/admdongkor/data/ 로 배포 (wheel embed)
+    Phase 4: 인덱스 산출물을 lib/src/admdongkor/data/ 로 모으기 (publish 직전 중간 위치)
 
 옵션:
     --only-phase N    특정 phase 만 (2/3/4)
@@ -41,9 +47,11 @@ LIB_DATA_DIR = REPO_ROOT / "lib" / "src" / "admdongkor" / "data"
 VERSIONS_FILE = REPO_ROOT / "lib" / "src" / "admdongkor" / "_versions.py"
 PYTHON = sys.executable  # 호출자가 사용한 파이썬 재사용
 
-# 라이브러리에 embed 할 인덱스 파일 (wheel 에 포함됨)
+# 인덱스 파일 목록 (phase 4 에서 lib/src/admdongkor/data/ 로 모이고,
+# publish_data.py 가 이걸 dist/data/ 로 복사 + manifest.json 생성)
 EMBED_FILES = [
     "_index.parquet",
+    "_index_v3.parquet",
     "timeline_v3_sido.parquet", "timeline_v3_sgg.parquet", "timeline_v3_emd.parquet",
     "shape_pairs_v3_sido.parquet", "shape_pairs_v3_sgg.parquet", "shape_pairs_v3_emd.parquet",
 ]
@@ -88,6 +96,8 @@ def phase2_build_find_index(dry_run: bool) -> None:
     """_versions.py 재생성 + admdongkor.build_index CLI → lib/data/_index.parquet.
 
     output 을 직접 lib/src/admdongkor/data/ 로 지정해 phase 4 에서 복사 불필요.
+    같은 내용을 `_index_v3.parquet` 으로도 복사해둔다 — 라이브러리 0.6.0+ 은
+    v3 파일명을 canonical 로 쓴다. `_index.parquet` 은 옛 이름 호환을 위해 유지.
     """
     print("\n=== PHASE 2: _versions.py + find() 인덱스 재빌드 ===", flush=True)
     regenerate_versions_py(dry_run)
@@ -101,6 +111,11 @@ def phase2_build_find_index(dry_run: bool) -> None:
              dry_run=dry_run)
     if rc != 0:
         raise RuntimeError(f"phase2 failed (rc={rc})")
+    # v3 별칭 생성 (동일 내용)
+    v3_out = LIB_DATA_DIR / "_index_v3.parquet"
+    print(f"  alias {index_out.name} -> {v3_out.name}", flush=True)
+    if not dry_run:
+        shutil.copy2(index_out, v3_out)
 
 
 def phase3_build_timeseries_index(workers: int, dry_run: bool) -> None:
@@ -129,15 +144,14 @@ def phase3_build_timeseries_index(workers: int, dry_run: bool) -> None:
 
 
 def phase4_move_indexes(dry_run: bool) -> None:
-    """인덱스 산출물을 lib/src/admdongkor/data/ 로 배포 (wheel embed 용).
+    """인덱스 산출물을 lib/src/admdongkor/data/ 로 모은다 (publish_data.py 가 읽을 위치).
 
-    phase 3 중간 산출물 (scripts/_timeline_v3_*.parquet, scripts/_shape_pairs_v3_*.parquet,
-    parquet/_index.parquet) 을 lib/src/admdongkor/data/ 로 모은다.
-
-    이전에는 parquet/ 에도 복사했지만, 라이브러리는 인덱스를 importlib.resources
-    로 embed 에서만 읽고 GitHub raw 에서 받지 않으므로 단일 canonical 위치만 유지.
+    phase 3 중간 산출물 (scripts/_timeline_v3_*.parquet, scripts/_shape_pairs_v3_*.parquet)
+    을 lib/src/admdongkor/data/ 로 모은다. _index.parquet 은 phase 2 에서 이미 거기에
+    기록됐고 _index_v3.parquet 별칭도 함께 생성된다. 이 디렉토리는 publish_data.py 가
+    dist/data/ 로 복사하기 직전 중간 위치이며, 더 이상 wheel 에 embed 되지 않는다.
     """
-    print("\n=== PHASE 4: 인덱스 배포 (lib/data/) ===", flush=True)
+    print("\n=== PHASE 4: 인덱스 수집 (lib/data/) ===", flush=True)
 
     if not dry_run:
         LIB_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -184,8 +198,10 @@ def main() -> int:
     print(f"\nALL DONE in {elapsed:.1f}s", flush=True)
     if not args.dry_run:
         print("\nnext:", flush=True)
-        print("  git status", flush=True)
-        print("  # 변경 확인 후 커밋", flush=True)
+        print("  # 인덱스 publish (dist/data/ 로 복사 + manifest.json 생성)", flush=True)
+        print('  python scripts/admin/publish_data.py --changes "<수정 내용>"', flush=True)
+        print("  git add dist/data/ && git commit && git push", flush=True)
+        print("  # lib 소스가 바뀐 경우에만 PyPI 재배포", flush=True)
     return 0
 
 
