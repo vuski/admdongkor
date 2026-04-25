@@ -1,15 +1,15 @@
-/** admdongkor 의 `_index.parquet` 를 직접 읽어 (version, level, code) → 이름·상위 이름 맵 제공.
+/** admdongkor 의 `_index_v3.parquet` 를 직접 읽어 (version, level, code) → 이름·상위 이름 맵 제공.
  *  타임라인 뷰의 라벨/파스텔 색 할당 등에서 이름·sidocd 가 필요하지만
  *  timeline/ meta 엔 이름이 없으므로 여기서 조달한다.
  *
- *  _index.parquet 는 admdongkor 라이브러리가 이미 `find()` 에서 쓰고 있다.
- *  같은 URL 을 그대로 fetch (브라우저 캐시 공유). */
+ *  `_index_v3.parquet` 는 admdongkor npm / PyPI 라이브러리가 `find()` 에서 쓰는 canonical
+ *  인덱스. 같은 URL 을 그대로 fetch (브라우저 캐시 공유). */
 
 import { parquetReadObjects } from "hyparquet";
 import { compressors } from "hyparquet-compressors";
 
 const INDEX_URL =
-  "https://raw.githubusercontent.com/vuski/admdongkor/master/lib/src/admdongkor/data/_index.parquet";
+  "https://raw.githubusercontent.com/vuski/admdongkor/master/dist/data/_index_v3.parquet";
 
 export interface NameRow {
   version_key: string;
@@ -28,7 +28,7 @@ export function loadNameIndex(): Promise<NameRow[]> {
   if (rowsPromise) return rowsPromise;
   rowsPromise = (async () => {
     const res = await fetch(INDEX_URL);
-    if (!res.ok) throw new Error(`_index.parquet ${res.status}`);
+    if (!res.ok) throw new Error(`_index_v3.parquet ${res.status}`);
     const buf = await res.arrayBuffer();
     const rows = (await parquetReadObjects({
       file: buf,

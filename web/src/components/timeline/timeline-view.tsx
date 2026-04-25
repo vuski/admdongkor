@@ -125,7 +125,7 @@ export function TimelineView() {
     setErrors(new Map());
     setNamesByVersion(new Map());
 
-    // versions 의 이름 맵 로드 (병렬). _index.parquet 는 한 번만 다운로드되고 캐시됨.
+    // versions 의 이름 맵 로드 (병렬). _index_v3.parquet 는 한 번만 다운로드되고 캐시됨.
     (async () => {
       const entries = await Promise.all(
         versions.map(async (v) => [v, await loadVersionNames(v)] as const),

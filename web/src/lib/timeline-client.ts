@@ -6,7 +6,7 @@
  *    timeline/v/<version>/meta.parquet   # columns: code(str), length(u32), level(dict<str>)
  *    timeline/v/<version>/geom.bin       # WKB concat, 같은 순서
  *
- *  meta 엔 이름·area 등이 없다. 이름 검색/라벨은 admdongkor 의 find()(_index.parquet) 사용.
+ *  meta 엔 이름·area 등이 없다. 이름 검색/라벨은 admdongkor 의 find()(_index_v3.parquet) 사용.
  */
 
 import { parquetReadObjects } from "hyparquet";
