@@ -20,13 +20,13 @@ flowchart LR
         SI["sido_*.parquet"]
     end
 
-    subgraph INDEX["글로벌 인덱스 (wheel 에 embed, 총 3.6 MB)"]
-        IX["_index.parquet<br/><i>find() 용 이름 검색</i>"]
+    subgraph INDEX["글로벌 인덱스 (GitHub dist/data/, 총 ~5.8 MB)"]
+        IX["_index_v3.parquet<br/><i>find() 용 이름 검색</i>"]
         TL["timeline_v3_*.parquet × 3<br/><i>element ↔ global shape ↔ version</i>"]
         SP["shape_pairs_v3_*.parquet × 3<br/><i>공간 겹친 shape 쌍 weight</i>"]
     end
 
-    subgraph API["공개 API (네트워크 0)"]
+    subgraph API["공개 API (import 시 자동 다운로드 + 캐시)"]
         V["versions()"]
         F["find()"]
         GT["get() ← 네트워크"]
@@ -86,23 +86,28 @@ parquet/{emd,sgg,sido}_*.parquet   ×  62 버전  ×  3 레벨  =  186 파일
                     │             │
                     ▼             ▼
          _index.parquet    timeline_v3_*.parquet
-                          shape_pairs_v3_*.parquet
+         +_index_v3.parquet (alias) shape_pairs_v3_*.parquet
                     │             │
                     └─────┬───────┘
                           ▼
-              lib/src/admdongkor/data/
-              (wheel 에 embed, 총 3.6 MB)
+              dist/data/  (publish_data.py)
+              └─ GitHub raw 로 서빙 (총 ~5.8 MB)
+              └─ manifest.json 에 sha256 기록
+              └─ lib 은 import 시 자동 다운로드 → user cache dir
 ```
 
 ---
 
 ## 2. 인덱스 4종 — 스키마와 역할
 
-### 2-1. `_index.parquet` — 이름 검색 (find)
+### 2-1. `_index_v3.parquet` — 이름 검색 (find)
+
+`_index.parquet` 이라는 옛 이름 별칭도 같은 내용으로 유지된다 (0.5.x 호환).
+canonical 이름은 `_index_v3.parquet`.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ _index.parquet                           233,297 행 / 1.7 MB │
+│ _index_v3.parquet                        233,297 행 / 1.7 MB │
 ├─────────────────────────────────────────────────────────────┤
 │ version_key | level | code    | code7 | code8 | name  | ... │
 ├─────────────────────────────────────────────────────────────┤
@@ -246,7 +251,7 @@ adk.versions()     ──────▶  _versions.py 의 VERSIONS 상수 반�
 ```
 사용자 코드                              인덱스 접근
 ─────────────                           ───────────
-adk.find("서울 종로")                    _index.parquet (embed, 1회 로드 후 LRU 캐시)
+adk.find("서울 종로")                    _index_v3.parquet (user cache, 1회 로드 후 LRU 캐시)
      │
      ├─ 토큰 분리: ["서울", "종로"]
      ├─ 2 토큰 → 자동 level = sgg
@@ -339,26 +344,51 @@ compare 는 emdcd 기준 (shape_id 기준 아님) — 행정경계 관점 비교
 
 ---
 
-## 5. 배포 계층 (wheel embed)
+## 5. 배포 계층 (외부 인덱스, 0.6.0+)
+
+**PyPI wheel 은 코드만 (~28 KB)**. 인덱스 parquet 은 GitHub repo 의 `dist/data/`
+에 올려두고, 사용자 라이브러리가 import 시 canonical URL 에서 manifest + 필요한
+파일만 받아 로컬 캐시에 저장한다.
 
 ```
-PyPI 업로드 되는 wheel:
-  admdongkor-0.5.0-py3-none-any.whl  (~ 4 MB)
-    ├─ admdongkor/
-    │   ├─ __init__.py, api.py, _match.py, _compare.py, ...
-    │   └─ data/                       ← importlib.resources 로 읽음
-    │       ├─ _index.parquet              1.7 MB
-    │       ├─ timeline_v3_sido.parquet      8 KB
-    │       ├─ timeline_v3_sgg.parquet     126 KB
-    │       ├─ timeline_v3_emd.parquet     1.5 MB
-    │       ├─ shape_pairs_v3_sido.parquet   3 KB
-    │       ├─ shape_pairs_v3_sgg.parquet   28 KB
-    │       └─ shape_pairs_v3_emd.parquet  380 KB
-    └─ ...
+PyPI 업로드 wheel:
+  admdongkor-0.6.0-py3-none-any.whl  (~ 28 KB, 코드만)
+    └─ admdongkor/
+        ├─ __init__.py   ← import 시 _cache.ensure_latest() 호출
+        ├─ _cache.py     ← manifest fetch, sha256 검증, atomic write
+        ├─ _index.py / _match.py / _compare.py / ...
+        └─ ...
 
-→ find() / match_adm() / compare() 는 네트워크 0.
-  get() 만 첫 호출 시 GitHub raw 에서 parquet 다운 (OS 캐시 위치).
+GitHub repo:
+  vuski/admdongkor/dist/data/
+    ├─ manifest.json                  ← data_version, sha256, history
+    ├─ CHANGELOG.md                   ← 사람이 읽는 이력
+    ├─ _index.parquet                 ← 옛 이름 (호환, 동일 내용 유지)
+    ├─ _index_v3.parquet              ← canonical, 라이브러리가 참조  (1.8 MB)
+    ├─ timeline_v3_sido.parquet       (  10 KB)
+    ├─ timeline_v3_sgg.parquet        ( 101 KB)
+    ├─ timeline_v3_emd.parquet        (1.5 MB)
+    ├─ shape_pairs_v3_sido.parquet    (  14 KB)
+    ├─ shape_pairs_v3_sgg.parquet     (  93 KB)
+    └─ shape_pairs_v3_emd.parquet     (2.2 MB)
+
+사용자 캐시 디렉토리 (platformdirs 관례):
+  %LOCALAPPDATA%\admdongkor\index\*.parquet  (Windows)
+  ~/.cache/admdongkor/index/*.parquet        (Linux)
+  ~/Library/Caches/admdongkor/index/*.parquet (macOS)
+
+→ find() / match_adm() / compare(): import 시 한 번 체크한 뒤 cache hit = 네트워크 0
+  get()                             : 첫 호출 시 GitHub raw 에서 parquet 다운 (같은 캐시)
+  데이터만 수정 시                     : `dist/data/` push → 다음 import 때 자동 반영
+                                       (PyPI 재배포 불필요)
 ```
+
+### 스키마 영속성 규약
+
+- `dist/data/` URL + 파일명은 **영구 stable** — 옮기면 배포된 구 번들이 깨짐
+- 스키마 변경은 **새 파일명으로 추가만** 허용: `_index_v4.parquet`, `timeline_v4_*`
+- 구 `v3` 파일은 freeze (삭제·내용변경 금지). 데이터 수정은 최신 스키마에만 반영
+- 구 번들은 freeze 시점 데이터 기준으로 계속 동작 (호환성 보장)
 
 ---
 
@@ -373,7 +403,7 @@ PyPI 업로드 되는 wheel:
 │ emd     │  3,558   │   204,131   │      10,771    │   23,736    │
 ├─────────┼──────────┼─────────────┼────────────────┼─────────────┤
 │ 총 버전 │   62 (1975–2026, 4개월 주기 + shapefile 이관 버전들)  │
-│ embed   │   3.6 MB (비압축), wheel 에 통째로 포함               │
+│ 인덱스  │   ~5.8 MB (비압축), GitHub dist/data/ — import 시 받음 │
 │ 원본    │   parquet/ 3종 × 62 = 186 파일 / 약 2.2 GB            │
 └─────────┴──────────┴─────────────┴────────────────┴─────────────┘
 ```
@@ -424,17 +454,22 @@ PyPI 업로드 되는 wheel:
 
 ## 부록 A — 관련 파일 위치
 
-| 경로                                                       | 역할                                            |
-| ---------------------------------------------------------- | ----------------------------------------------- |
-| `parquet/emd_*.parquet`, `sgg_*.parquet`, `sido_*.parquet` | 지도 (GitHub raw 로 서빙, `get()` 이 다운로드)  |
-| `lib/src/admdongkor/data/_index.parquet`                   | 이름 검색 (find 용, wheel embed)                |
-| `lib/src/admdongkor/data/timeline_v3_*.parquet`            | element ↔ shape ↔ version (wheel embed)         |
-| `lib/src/admdongkor/data/shape_pairs_v3_*.parquet`         | shape 쌍 weight (wheel embed)                   |
-| `lib/src/admdongkor/_versions.py`                          | 버전 키 상수 (rebuild_all 이 자동 재생성)       |
-| `scripts/admin/`                                           | Phase 1 (GeoJSON → parquet)                     |
-| `scripts/measure_v3_step1/2/3_*.py`                        | Phase 3 (timeline + shape_pairs 산출)           |
-| `scripts/admin/rebuild_all.py`                             | 파이프라인 래퍼 (phase 2~4 인덱스 일괄 재빌드)  |
+| 경로                                                       | 역할                                                     |
+| ---------------------------------------------------------- | -------------------------------------------------------- |
+| `parquet/emd_*.parquet`, `sgg_*.parquet`, `sido_*.parquet` | 지도 (GitHub raw 로 서빙, `get()` 이 다운로드)           |
+| `dist/data/_index_v3.parquet`                              | 이름 검색 (find 용, canonical)                           |
+| `dist/data/_index.parquet`                                 | 위와 동일 내용의 별칭 (0.5.x 호환)                       |
+| `dist/data/timeline_v3_*.parquet`                          | element ↔ shape ↔ version                                |
+| `dist/data/shape_pairs_v3_*.parquet`                       | shape 쌍 weight                                          |
+| `dist/data/manifest.json`                                  | data_version + 파일별 sha256 + 수정 이력                 |
+| `dist/data/CHANGELOG.md`                                   | 사람이 읽는 이력 (Markdown)                              |
+| `lib/src/admdongkor/data/`                                 | rebuild_all.py 중간 산출 위치 (publish_data.py 가 복사)  |
+| `lib/src/admdongkor/_versions.py`                          | 버전 키 상수 (rebuild_all 이 자동 재생성)                |
+| `scripts/admin/rebuild_all.py`                             | 파이프라인 래퍼 (phase 2~4 인덱스 일괄 재빌드)           |
+| `scripts/admin/publish_data.py`                            | lib/data/*.parquet → dist/data/ 복사 + manifest.json     |
+| `scripts/measure_v3_step1/2/3_*.py`                        | Phase 3 (timeline + shape_pairs 산출)                    |
 
-**인덱스 4종은 `lib/src/admdongkor/data/` 한 곳에만 존재** — wheel 에 embed 되어
-`importlib.resources` 로 로드. `parquet/` 에는 지도 parquet 만 있음 (GitHub raw
-서빙 전용).
+**canonical 위치는 `dist/data/`** — GitHub raw (`raw.githubusercontent.com/.../master/dist/data/...`)
+로 서빙되며, 라이브러리는 import 시 manifest 비교 후 필요한 파일을 사용자 캐시 폴더
+(`platformdirs.user_cache_dir("admdongkor")/index/`) 에 저장. `parquet/` 에는 지도 parquet 만
+있음 (GitHub raw 서빙 전용).

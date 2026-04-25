@@ -11,8 +11,18 @@
 pip install admdongkor
 ```
 
-패키지에 검색 인덱스·시계열 매칭 인덱스가 **embed** 되어 `find` / `match_adm` /
-`compare` 는 **네트워크 없이 즉시 동작**. 지도 parquet 만 필요할 때 다운로드.
+검색 인덱스·시계열 매칭 인덱스는 **설치 후 첫 `import` 시 자동 다운로드** 되어
+사용자 캐시 디렉토리에 저장됩니다 (약 5.8MB). 이후 import 할 때마다 GitHub
+manifest 와 비교해 **필요시에만 갱신** — 데이터 수정(예: 과거 시군구 이름
+정정)이 있을 때 `pip install -U` 없이도 최신 인덱스가 반영됩니다.
+
+| 환경변수                         | 용도                                                        |
+| -------------------------------- | ----------------------------------------------------------- |
+| `ADMDONGKOR_NO_AUTO_UPDATE=1`    | import 시 자동 갱신 끔 (CI / 재현성)                         |
+| `ADMDONGKOR_DATA_DIR=/path/...`  | 로컬 인덱스 경로 고정 (네트워크 우회, 오프라인 배포용)          |
+| `ADMDONGKOR_CACHE_DIR=/path/...` | 캐시 위치 override (기본: OS 관례 폴더)                     |
+
+> **스키마 영속성**: 인덱스 파일명에 붙은 `v3` 는 스키마 버전 태그입니다. 구 파일 (`_index.parquet`, `timeline_v3_*`, `shape_pairs_v3_*`) 은 **영구 유지**되며, 스키마 변경이 있을 때는 `v4_*` 처럼 **새 파일명으로 병렬 추가**됩니다. 따라서 배포된 라이브러리는 설치 시점의 스키마를 그대로 계속 쓸 수 있고, 데이터 내용 수정(이름 정정 등)만 자동 반영됩니다.
 
 ---
 
@@ -174,9 +184,26 @@ c.diff()[c.diff().status == "changed"].nsmallest(5, "iou")  # 가장 많이 변�
 ### `cache_dir() -> Path`
 
 지도 parquet 캐시 폴더. OS 별 자동 결정, `ADMDONGKOR_CACHE_DIR` 환경변수로 override.
+인덱스 parquet 은 이 폴더의 `index/` 서브디렉토리에 저장됨.
 
 - Windows: `%LOCALAPPDATA%\admdongkor\`
 - macOS/Linux: `$XDG_CACHE_HOME/admdongkor/` 또는 `~/.cache/admdongkor/`
+
+### `data_version() -> str | None`
+
+현재 로컬 캐시에 반영된 인덱스 data_version (예: `"2026.04.25"`). 캐시 없으면 `None`.
+
+### `changelog() -> DataFrame`
+
+인덱스 수정 이력. 컬럼: `version`, `changes`. 최신이 맨 위. manifest 에 포함된
+`history` 를 그대로 보여준다.
+
+```python
+adk.changelog()
+#       version                               changes
+# 0  2026.04.25  1980 경상북도 대구시수성구 이름 수정
+# 1  2026.04.20  1975 대전시 prefix 추가
+```
 
 ---
 

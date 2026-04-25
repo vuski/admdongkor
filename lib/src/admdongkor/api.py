@@ -7,7 +7,7 @@ from typing import Literal
 import geopandas as gpd
 import pandas as pd
 
-from . import _compare, _index, _match
+from . import _cache, _compare, _index, _match
 from ._cache import download_if_needed
 from ._compare import CompareResult
 from ._match import MatchResult
@@ -221,6 +221,37 @@ def match_adm(
     return _match.match_adm(
         base=base, region=region, target=target, min_weight=min_weight,
     )
+
+
+def data_version() -> str | None:
+    """현재 로컬 캐시에 반영된 인덱스 data_version.
+
+    캐시가 없거나 아직 갱신된 적 없으면 `None`. 포맷 예: `"2026.04.25"`.
+    """
+    return _cache.data_version()
+
+
+def changelog() -> pd.DataFrame:
+    """인덱스 수정 이력.
+
+    반환 컬럼: `version`, `changes`. 최신 항목이 위. 캐시된 manifest 가 없으면
+    빈 DataFrame.
+
+    Examples:
+        >>> adk.changelog()
+            version      changes
+        0   2026.04.25   1980 경상북도 대구시수성구 이름 수정
+        1   2026.04.20   1975 대전시 prefix 추가
+    """
+    items = _cache.changelog()
+    if not items:
+        return pd.DataFrame(columns=["version", "changes"])
+    df = pd.DataFrame(items)
+    # 누락된 컬럼 보정
+    for col in ("version", "changes"):
+        if col not in df.columns:
+            df[col] = ""
+    return df[["version", "changes"]]
 
 
 def compare(versions: list[str], threshold: float = 0.99) -> CompareResult:

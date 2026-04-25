@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "admdongkor"
-version = "0.5.6"
+version = "0.6.0"
 description = "Korea administrative boundary parquet downloader + 시계열 영역 매칭 (읍면동/시군구/시도, 1975–2026)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -41,4 +41,16 @@ Issues = "https://github.com/vuski/admdongkor/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/admdongkor"]
-# data/*.parquet 은 packages 설정에 포함되어 wheel 에 embed 됨
+# 인덱스 parquet (src/admdongkor/data/) 은 wheel 에 embed 하지 않는다 —
+# import 시 _cache.ensure_latest() 가 GitHub dist/data/ 에서 받아
+# 사용자 캐시 디렉토리에 저장한다. 데이터만 수정할 땐 PyPI 재배포 불필요.
+exclude = [
+    "src/admdongkor/data/*.parquet",
+    "src/admdongkor/data",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "src/admdongkor/data/*.parquet",
+    "src/admdongkor/data",
+]

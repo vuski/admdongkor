@@ -1,4 +1,4 @@
-"""compare() 동작 테스트. embed 된 실제 인덱스 사용."""
+"""compare() 동작 테스트. 캐시된 실제 인덱스 사용."""
 
 from __future__ import annotations
 

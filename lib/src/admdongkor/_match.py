@@ -9,15 +9,17 @@ base 시점의 region (sido/sgg/emd 코드) 경계를 기준으로, target 시�
     3. target version 에 해당 shape_id 들이 등장하는 emd 를 찾아 매칭
     4. 동일 target emd 가 여러 base emd 로부터 매칭되면 weight 합산
 
-이 모든 인덱스는 패키지에 embed (importlib.resources) 라 네트워크 0.
+인덱스는 로컬 캐시 (`_cache.index_dir()`) 에서 로드. 캐시는 import 시
+`_cache.ensure_latest()` 가 GitHub dist/data/ 에서 받아둔다.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
-from importlib.resources import files
 
 import pandas as pd
+
+from . import _cache
 
 _OUTPUT_EMD_COLS = [
     "version_key", "emdcd", "emdnm",
@@ -55,15 +57,13 @@ class MatchResult(pd.DataFrame):
 @lru_cache(maxsize=3)
 def _load_timeline(level: str) -> pd.DataFrame:
     fname = f"timeline_v3_{level}.parquet"
-    with files("admdongkor.data").joinpath(fname).open("rb") as f:
-        return pd.read_parquet(f)
+    return pd.read_parquet(_cache.index_data_path(fname))
 
 
 @lru_cache(maxsize=3)
 def _load_shape_pairs(level: str) -> pd.DataFrame:
     fname = f"shape_pairs_v3_{level}.parquet"
-    with files("admdongkor.data").joinpath(fname).open("rb") as f:
-        return pd.read_parquet(f)
+    return pd.read_parquet(_cache.index_data_path(fname))
 
 
 def _resolve_region_mask(tl: pd.DataFrame, base: str, region: str) -> pd.Series:

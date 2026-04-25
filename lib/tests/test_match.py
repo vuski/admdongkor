@@ -1,4 +1,4 @@
-"""match_adm 동작 테스트. 실제 embed 된 timeline/shape_pairs 사용."""
+"""match_adm 동작 테스트. 실제 캐시된 timeline/shape_pairs 사용."""
 
 from __future__ import annotations
 
