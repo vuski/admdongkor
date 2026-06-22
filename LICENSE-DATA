@@ -1,0 +1,48 @@
+DATA_LICENSE — admdongkor 경계 데이터 / boundary data
+
+이 파일은 admdongkor 저장소의 [데이터](행정동·시군구·시도 경계: geojson, parquet,
+중심점 등)에 적용됩니다. 소스 코드(js/, lib/ 등)는 별도로 MIT License(LICENSE)를 따릅니다.
+
+This file covers the DATA in this repository (administrative boundary files:
+geojson, parquet, centroids). Source code (js/, lib/) is licensed separately
+under the MIT License (see LICENSE).
+
+──────────────────────────────────────────────────────────
+
+1. 가공물 라이선스 / License of this dataset
+
+이 저장소가 추가·가공한 부분(경계 보정, 행정동 변경이력 반영, 코드 매칭 인덱스,
+시계열 데이터 등)은 Creative Commons Attribution 4.0 International (CC BY 4.0)
+으로 제공됩니다.
+  SPDX-License-Identifier: CC-BY-4.0
+  전문(Full text): https://creativecommons.org/licenses/by/4.0/  (국문: .../legalcode.ko)
+
+2. 원자료 조건 / Upstream source condition
+
+경계의 원자료는 통계청 통계지리정보서비스(SGIS)가 공공누리 제1유형(출처표시)으로
+개방한 행정동 경계입니다. 이 출처표시 의무는 가공 여부와 무관하게 유지되므로,
+본 데이터를 이용·재배포할 때 SGIS 출처표시를 반드시 보존해야 합니다.
+  공공누리 제1유형: https://www.kogl.or.kr/info/licenseType1.do
+
+The underlying boundaries originate from Statistics Korea (SGIS), released under
+the Korea Open Government License (KOGL) Type 1 (attribution). This requirement
+persists regardless of modification; SGIS attribution must be preserved.
+
+3. 출처 표기 / Required attribution
+
+본 데이터를 이용할 경우 아래 표기를 유지하시기 바랍니다.
+
+  "본 데이터는 통계청 통계지리정보서비스(SGIS, https://sgis.kostat.go.kr)에서
+   공공누리 제1유형으로 개방한 행정동 경계를 가공한 것이며(가공: vuski/admdongkor,
+   https://github.com/vuski/admdongkor), CC BY 4.0으로 배포됩니다."
+
+  "This data is derived from administrative-dong boundaries released by Statistics
+   Korea SGIS (https://sgis.kostat.go.kr) under KOGL Type 1, modified by
+   vuski/admdongkor (https://github.com/vuski/admdongkor), distributed under CC BY 4.0."
+
+4. 면책 / Disclaimer
+
+본 데이터는 "있는 그대로(as is)" 제공되며 정확성·완전성을 보증하지 않습니다.
+원자료 제공기관(SGIS)은 이 저장소의 가공 과정에서 발생한 오류에 대해 책임지지 않습니다.
+Provided "as is", without warranty. SGIS is not responsible for errors introduced
+by this repository's processing.
