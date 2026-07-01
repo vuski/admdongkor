@@ -42,8 +42,11 @@ function shortSido(name: string | null): string {
     경상북도: "경북",
     경상남도: "경남",
     제주특별자치도: "제주",
+    전남광주통합특별시: "전남광주",
   };
-  return map[name] ?? name.replace(/(특별시|광역시|특별자치시|특별자치도|도)$/u, "");
+  return (
+    map[name] ?? name.replace(/(특별시|광역시|특별자치시|특별자치도|도)$/u, "")
+  );
 }
 
 /** Ring bbox 의 면적 (경위도 단위). MultiPolygon 에서 가장 큰 조각 선택용. */
@@ -114,7 +117,7 @@ export function buildLabels(
       id = `emd|${p.emdcd ?? `${p.sggnm}${p.emdnm}`}`;
     }
     // priority 는 CollisionFilterExtension 에서 GPU float 로 다뤄진다. m² 단위
-     // 원본 area 는 수억까지 커서 내부 연산이 불안정 → log10 으로 0-10 범위로 정규화.
+    // 원본 area 는 수억까지 커서 내부 연산이 불안정 → log10 으로 0-10 범위로 정규화.
     const pr = props.area > 0 ? Math.log10(props.area) : 0;
     out.push({
       position: pos,
