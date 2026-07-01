@@ -1,9 +1,13 @@
 {
-  "data_version": "2026.04.25",
+  "data_version": "2026.07.01",
   "schema_version": "v3",
   "min_lib_version": "0.6.0",
-  "created_at": "2026-04-25T06:24:18Z",
+  "created_at": "2026-07-01T04:10:18Z",
   "history": [
+    {
+      "version": "2026.07.01",
+      "changes": "20260701 추가: 인천 제물포·영종·서해·검단구 신설, 전남광주통합특별시(광주+전남 통합) 출범"
+    },
     {
       "version": "2026.04.25",
       "changes": "1980 sgg 이름 정정 (대구시 prefix 추가: 37011~37016 중구/동구/서구/남구/북구/수성구). 0.6.0 외부 인덱스로 전환 (PyPI wheel embed 제거). 2000-2002 인천 옥련동 emdcd 2817062000 → 2818562000 정정 (1995-03 인천 남구→연수구 분리 후 통계청 미반영 정정). 2003-2018-04 sggnm '영동군증평군' → '증평군' 정정 (resolve_sgg 4자리 prefix 합성 오류). 2000-2002 충북 43760 안에 괴산군+증평출장소 별도 행으로 분리 (raw emdcd 보존)."
@@ -11,36 +15,36 @@
   ],
   "files": {
     "_index.parquet": {
-      "size": 1814933,
-      "sha256": "cdc30d22bae6e23ddf8d90e87e2722ef4eb568839c51dfb0a1d006f1ad88ecf0"
+      "size": 1859367,
+      "sha256": "dacbd5b5bd3e1c50a27972285ced3e62692bd253edbf439a57ad3a6f85ad9bd0"
     },
     "_index_v3.parquet": {
-      "size": 1814933,
-      "sha256": "cdc30d22bae6e23ddf8d90e87e2722ef4eb568839c51dfb0a1d006f1ad88ecf0"
+      "size": 1859367,
+      "sha256": "dacbd5b5bd3e1c50a27972285ced3e62692bd253edbf439a57ad3a6f85ad9bd0"
     },
     "timeline_v3_sido.parquet": {
-      "size": 10374,
-      "sha256": "d400f312d30df94be8a9536f0b56b5a847abb57bdd1d941f2a57c92ed43c5f5a"
+      "size": 10680,
+      "sha256": "20931af613f66185c12bcb1d491a8cb82d87dd813e06041852933d4582a66599"
     },
     "timeline_v3_sgg.parquet": {
-      "size": 102650,
-      "sha256": "5354c387495c1201a067b1f9ae1a24a5aad5baf47458b6c249ede290e7a5f5e9"
+      "size": 105056,
+      "sha256": "d339b01f6761c381575a4f71c514941fe6a3e89153d793f056853f91b5e6bf1f"
     },
     "timeline_v3_emd.parquet": {
-      "size": 1547485,
-      "sha256": "49056479002a81d217a168faf46871a9c7fd3c53ac0c17ae2f90b14fa74e6469"
+      "size": 1561797,
+      "sha256": "f7979e6b47ad54a0bb6012fb1868e52327197943bee2269ce3c1fd927dc18206"
     },
     "shape_pairs_v3_sido.parquet": {
-      "size": 14010,
-      "sha256": "d48d2fac02aa7090acd7dddcdf08f9f871530e57af11412c40f8b7c2e32d93a2"
+      "size": 14326,
+      "sha256": "50e3dc4bc97f6a819eb1640d9ac01991b68bd062f0912822c0b02fb2b4b53523"
     },
     "shape_pairs_v3_sgg.parquet": {
-      "size": 91878,
-      "sha256": "6477369d9df5832ec5049570dc26727f5149297d57547b4c1c439daa666c6c6b"
+      "size": 93466,
+      "sha256": "3a5811f217aa03ff3e87f4f3e5d138e4fe7857478ddcc3fa315fb556736b9426"
     },
     "shape_pairs_v3_emd.parquet": {
-      "size": 2167419,
-      "sha256": "90c96ef754761dd31f14e61b8d5a083982d8689d844b7ba8ba11e304f9c31433"
+      "size": 2167472,
+      "sha256": "8af06696ecd124cc94a998c89f98e2c556051bbe61e37cdb75ace81bc43be4ac"
     }
   }
 }
