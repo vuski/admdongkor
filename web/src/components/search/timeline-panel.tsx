@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Loader2, AlertCircle, Play, X } from "lucide-react";
-import { VERSIONS, find } from "admdongkor";
-import { fetchVersions } from "@/lib/timeline-client";
+import { find } from "admdongkor";
 import type { TimelineQuerySelection } from "@/stores/timeline-store";
 import {
   fmtVersionLabel,
@@ -14,8 +13,6 @@ import { useAppStore } from "@/stores/app-store";
 import { useTimelineStore } from "@/stores/timeline-store";
 import { cn } from "@/lib/cn";
 
-const DEFAULT_BASE_VERSION = VERSIONS[VERSIONS.length - 1]!;
-
 /** 이름 검색으로 나온 후보. 기준 연도의 find() 결과에서 level 에 맞게 필터. */
 interface Candidate {
   code: string;
@@ -24,17 +21,12 @@ interface Candidate {
 }
 
 export function TimelinePanel() {
-  const [allVersions, setAllVersions] = useState<string[]>([]);
-  const [versionsErr, setVersionsErr] = useState<string | null>(null);
+  // 버전 목록은 app-store 의 versionList (manifest 기반, 데이터 갱신 시 자동 반영).
+  const allVersions = useAppStore((s) => s.versionList);
 
-  // 부팅 시 versions.json 로드.
-  useEffect(() => {
-    fetchVersions()
-      .then((v) => setAllVersions(v.versions))
-      .catch((e) => setVersionsErr(String(e)));
-  }, []);
-
-  const [baseVersion, setBaseVersion] = useState<string>(DEFAULT_BASE_VERSION);
+  const [baseVersion, setBaseVersion] = useState<string>(
+    () => allVersions[allVersions.length - 1]!,
+  );
   const [level, setLevel] = useState<"sido" | "sgg">("sgg");
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -188,7 +180,7 @@ export function TimelinePanel() {
     <div className="space-y-3">
       <FieldBaseVersion
         value={baseVersion}
-        options={allVersions.length > 0 ? allVersions : [...VERSIONS]}
+        options={allVersions}
         onChange={setBaseVersion}
       />
 
@@ -212,10 +204,10 @@ export function TimelinePanel() {
         )}
       </div>
 
-      {(versionsErr || searchErr) && (
+      {searchErr && (
         <div className="flex items-start gap-2 text-[11px] text-red-600 px-2 py-1.5 rounded bg-red-50 dark:bg-red-950/30">
           <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <span>{versionsErr ?? searchErr}</span>
+          <span>{searchErr}</span>
         </div>
       )}
 

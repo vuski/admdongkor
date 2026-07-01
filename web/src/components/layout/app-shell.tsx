@@ -27,11 +27,17 @@ export function AppShell() {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const timelineViewActive = useAppStore((s) => s.timelineViewActive);
+  const initVersionList = useAppStore((s) => s.initVersionList);
   const isMobile = useIsMobile();
 
   useEffect(() => {
     if (isMobile) setRightPanelOpen(false);
   }, [isMobile, setRightPanelOpen]);
+
+  // manifest.json 에서 최신 버전 목록을 받아 슬라이더 범위를 데이터에 맞춘다 (1회).
+  useEffect(() => {
+    void initVersionList();
+  }, [initVersionList]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">

@@ -14,6 +14,8 @@ export interface Manifest {
   schema_version: string;
   min_lib_version: string;
   created_at: string;
+  /** 사용 가능한 버전 키 목록 (오름차순). 옛 배포에는 없을 수 있음 (optional). */
+  versions?: string[];
   history: ChangelogEntry[];
   files: Record<string, { size: number; sha256: string }>;
 }

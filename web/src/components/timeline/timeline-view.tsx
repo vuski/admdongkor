@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
-import { matchAdm, VERSIONS } from "admdongkor";
+import { matchAdm } from "admdongkor";
 import polylabel from "@mapbox/polylabel";
 import { useAppStore } from "@/stores/app-store";
 import {
@@ -129,6 +129,7 @@ export function TimelineView() {
   const updateViewport = useTimelineStore((s) => s.updateViewport);
   const showLabels = useAppStore((s) => s.showLabels);
   const setTimelineViewActive = useAppStore((s) => s.setTimelineViewActive);
+  const versionList = useAppStore((s) => s.versionList);
   const baseGeometries = useTimelineStore((s) => s.baseGeometries);
   const setBaseGeometries = useTimelineStore((s) => s.setBaseGeometries);
 
@@ -161,7 +162,7 @@ export function TimelineView() {
       // 이름 로드 실패해도 geometry 는 그릴 수 있음 — 조용히 무시.
     });
 
-    const validVersions = new Set(VERSIONS as readonly string[]);
+    const validVersions = new Set(versionList);
     // matchAdm 이 지원하는 target 만 (1990+). 그 외는 별도로 "미지원" 마킹.
     const supportedTargets = versions.filter((v) => validVersions.has(v));
     const unsupportedTargets = versions.filter((v) => !validVersions.has(v));
@@ -285,7 +286,7 @@ export function TimelineView() {
     return () => {
       cancelled = true;
     };
-  }, [query, versions]);
+  }, [query, versions, versionList]);
 
   // 초기 viewport 는 셀 내부에서 계산 — bbox + 셀의 실제 픽셀 width/height 둘 다
   // 있어야 잘리지 않고 fit 가능하기 때문.

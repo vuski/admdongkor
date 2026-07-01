@@ -1,4 +1,4 @@
-export { versions, VERSIONS } from "./versions.js";
+export { versions, versionsAsync, VERSIONS } from "./versions.js";
 export type { VersionKey } from "./versions.js";
 export { get, getParquet } from "./get.js";
 export {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { VERSIONS } from "admdongkor";
 import { useAppStore } from "@/stores/app-store";
 
 function formatKey(key: string): string {
@@ -15,7 +14,7 @@ export function VersionSlider() {
   const setVersionKeyB = useAppStore((s) => s.setVersionKeyB);
   const compareMode = useAppStore((s) => s.compareMode);
 
-  const list = VERSIONS as readonly string[];
+  const list = useAppStore((s) => s.versionList) as readonly string[];
 
   return (
     <div className="space-y-3">

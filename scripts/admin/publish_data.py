@@ -96,6 +96,21 @@ def _ensure_v3_alias(dry_run: bool) -> None:
         shutil.copy2(base, alias)
 
 
+def _version_keys() -> list[str]:
+    """`_index.parquet` 의 version_key 컬럼에서 정렬된 유니크 버전 목록을 뽑는다.
+
+    이 목록이 버전 목록의 single source of truth. manifest 에 실어 두면
+    JS `versionsAsync()` 가 런타임에 이걸 읽어 슬라이더 등에 쓴다.
+    """
+    import pandas as pd  # 지연 import — publish 시에만 필요
+
+    src = LIB_DATA_DIR / "_index.parquet"
+    if not src.exists():
+        raise FileNotFoundError(f"missing index file: {src}")
+    keys = pd.read_parquet(src, columns=["version_key"])["version_key"]
+    return sorted(keys.astype(str).unique())
+
+
 def build_manifest(data_version: str, changes: str) -> dict:
     files: dict[str, dict] = {}
     for fname in INDEX_FILES:
@@ -114,6 +129,7 @@ def build_manifest(data_version: str, changes: str) -> dict:
         "schema_version": SCHEMA_VERSION,
         "min_lib_version": MIN_LIB_VERSION,
         "created_at": _iso_now(),
+        "versions": _version_keys(),
         "history": history,
         "files": files,
     }
@@ -194,7 +210,7 @@ def main() -> int:
         print("\nnext:")
         print(f"  cd {REPO_ROOT}")
         print("  git add dist/data/")
-        print(f"  git commit -m \"data: {args.data_version} — {args.changes}\"")
+        print(f"  git commit -m \"data: {args.data_version} - {args.changes}\"")
         print("  git push")
     return 0
 

@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import type { Level } from "admdongkor";
-import { VERSIONS } from "admdongkor";
+import { VERSIONS, versionsAsync } from "admdongkor";
 
 export interface FlyToRequest {
   /** GeoJSON bbox [minLon, minLat, maxLon, maxLat]. */
@@ -24,6 +24,8 @@ export interface FlyToRequest {
 export type RightPanelTab = "search" | "timeline";
 
 interface AppState {
+  /** 런타임 버전 목록. 초기엔 동기 VERSIONS 스냅샷, initVersionList() 로 최신 교체. */
+  versionList: string[];
   versionKey: string;
   versionKeyB: string;
   level: Level;
@@ -42,6 +44,8 @@ interface AppState {
   /** 시계열 뷰가 활성화되면 지도 대신 타임라인 스크롤을 보여준다. */
   timelineViewActive: boolean;
 
+  /** manifest.json 에서 최신 버전 목록을 받아 versionList 를 갱신. 앱 마운트 시 1회. */
+  initVersionList: () => Promise<void>;
   setVersionKey: (v: string) => void;
   setVersionKeyB: (v: string) => void;
   setLevel: (l: Level) => void;
@@ -63,10 +67,12 @@ interface AppState {
   setTimelineViewActive: (v: boolean) => void;
 }
 
-const DEFAULT_VERSION = VERSIONS[VERSIONS.length - 1];
-const EARLIER_VERSION = VERSIONS[Math.max(0, VERSIONS.length - 20)];
+const SNAPSHOT: string[] = [...VERSIONS];
+const DEFAULT_VERSION = SNAPSHOT[SNAPSHOT.length - 1];
+const EARLIER_VERSION = SNAPSHOT[Math.max(0, SNAPSHOT.length - 20)];
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
+  versionList: SNAPSHOT,
   versionKey: DEFAULT_VERSION,
   versionKeyB: EARLIER_VERSION,
   level: "sido",
@@ -81,6 +87,20 @@ export const useAppStore = create<AppState>((set) => ({
   rightPanelTab: "search",
   timelineViewActive: false,
 
+  initVersionList: async () => {
+    const list = await versionsAsync();
+    if (list.length === 0) return;
+    const s = get();
+    const latest = list[list.length - 1];
+    const prevLatest = s.versionList[s.versionList.length - 1];
+    // versionKey 가 아직 '스냅샷 최신'을 가리키고 있으면(사용자 미조작) 새 최신으로 이동.
+    const nextA = s.versionKey === prevLatest ? latest : s.versionKey;
+    const earlier = list[Math.max(0, list.length - 20)];
+    const nextB = s.versionKeyB === s.versionList[Math.max(0, s.versionList.length - 20)]
+      ? earlier
+      : s.versionKeyB;
+    set({ versionList: list, versionKey: nextA, versionKeyB: nextB });
+  },
   setVersionKey: (v) => set({ versionKey: v }),
   setVersionKeyB: (v) => set({ versionKeyB: v }),
   setLevel: (l) => set({ level: l }),

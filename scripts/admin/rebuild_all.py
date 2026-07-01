@@ -45,6 +45,7 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 ADMIN_DIR = SCRIPTS_DIR / "admin"
 LIB_DATA_DIR = REPO_ROOT / "lib" / "src" / "admdongkor" / "data"
 VERSIONS_FILE = REPO_ROOT / "lib" / "src" / "admdongkor" / "_versions.py"
+JS_VERSIONS_FILE = REPO_ROOT / "js" / "src" / "versions.ts"
 PYTHON = sys.executable  # 호출자가 사용한 파이썬 재사용
 
 # 인덱스 파일 목록 (phase 4 에서 lib/src/admdongkor/data/ 로 모이고,
@@ -85,6 +86,50 @@ def regenerate_versions_py(dry_run: bool) -> None:
         VERSIONS_FILE.write_text(content, encoding="utf-8")
 
 
+JS_VERSIONS_START = "// === AUTO-GENERATED VERSIONS START"
+JS_VERSIONS_END = "// === AUTO-GENERATED VERSIONS END ==="
+
+
+def regenerate_versions_ts(dry_run: bool) -> None:
+    """js/src/versions.ts 의 AUTO-GENERATED 블록(VERSIONS 배열)만 교체.
+
+    Python _versions.py 와 동일한 parquet 스캔 결과를 쓰되, versions()/versionsAsync()
+    함수·타입은 마커 밖에 있어 건드리지 않는다. 마커가 없으면(구조 변경 시) 경고만 내고 skip.
+    """
+    keys = sorted(p.stem.split("_", 1)[1]
+                  for p in PARQUET_DIR.glob("emd_*.parquet"))
+    if not keys:
+        raise RuntimeError(f"no emd_*.parquet in {PARQUET_DIR}")
+
+    if not JS_VERSIONS_FILE.exists():
+        print(f"  ! {JS_VERSIONS_FILE.relative_to(REPO_ROOT)} 없음 — skip", flush=True)
+        return
+
+    text = JS_VERSIONS_FILE.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    try:
+        i0 = next(i for i, ln in enumerate(lines) if ln.startswith(JS_VERSIONS_START))
+        i1 = next(i for i, ln in enumerate(lines) if ln.startswith(JS_VERSIONS_END))
+    except StopIteration:
+        print(f"  ! {JS_VERSIONS_FILE.name} 에 AUTO-GENERATED 마커 없음 — skip", flush=True)
+        return
+
+    block = [lines[i0],  # START 마커 줄 (주석 포함) 그대로 유지
+             "export const VERSIONS = ["]
+    for j in range(0, len(keys), 6):
+        chunk = keys[j:j + 6]
+        block.append("  " + ", ".join(f'"{k}"' for k in chunk) + ",")
+    block.append("] as const;")
+    block.append(lines[i1])  # END 마커 줄 그대로 유지
+
+    new_lines = lines[:i0] + block + lines[i1 + 1:]
+    new_text = "\n".join(new_lines) + "\n"
+
+    print(f"$ regenerate {JS_VERSIONS_FILE.relative_to(REPO_ROOT)} ({len(keys)} versions)", flush=True)
+    if not dry_run and new_text != text:
+        JS_VERSIONS_FILE.write_text(new_text, encoding="utf-8")
+
+
 def run(cmd: list[str], dry_run: bool = False) -> int:
     print(f"$ {' '.join(str(c) for c in cmd)}", flush=True)
     if dry_run:
@@ -99,8 +144,9 @@ def phase2_build_find_index(dry_run: bool) -> None:
     같은 내용을 `_index_v3.parquet` 으로도 복사해둔다 — 라이브러리 0.6.0+ 은
     v3 파일명을 canonical 로 쓴다. `_index.parquet` 은 옛 이름 호환을 위해 유지.
     """
-    print("\n=== PHASE 2: _versions.py + find() 인덱스 재빌드 ===", flush=True)
+    print("\n=== PHASE 2: _versions.py + versions.ts + find() 인덱스 재빌드 ===", flush=True)
     regenerate_versions_py(dry_run)
+    regenerate_versions_ts(dry_run)
     if not dry_run:
         LIB_DATA_DIR.mkdir(parents=True, exist_ok=True)
     index_out = LIB_DATA_DIR / "_index.parquet"
