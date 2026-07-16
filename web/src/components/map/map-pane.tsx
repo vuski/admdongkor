@@ -29,7 +29,8 @@ import {
   B_LINE_BY_LEVEL,
   lineWidthForLevel,
 } from "./layer-colors";
-import { buildLabelLayers, type LabelData } from "./label-layers";
+import type { LabelData } from "./label-layers";
+import { applyLabels, ensureDeckAnchor, DECK_ANCHOR_ID } from "./label-symbol";
 import type { HoverInfo } from "./hover-types";
 
 export interface MapPaneHandle {
@@ -72,7 +73,10 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
   const mapRef = useRef<MapRef>(null);
   useImperativeHandle(ref, () => ({ get map() { return mapRef.current; } }), []);
 
+  // emd 모드의 줌<10 sgg fallback 판단에 필요. 정수 줌만 state 로 (TextLayer 재생성 X).
   const [zoomInt, setZoomInt] = useState(Math.floor(INITIAL_VIEW.zoom));
+  // map 인스턴스 준비 완료 여부. onLoad 에서 true → 라벨 effect 재실행 트리거.
+  const [mapReady, setMapReady] = useState(false);
 
   const fillPalette = side === "A" ? A_FILL_BY_LEVEL : B_FILL_BY_LEVEL;
   const linePalette = side === "A" ? A_LINE_BY_LEVEL : B_LINE_BY_LEVEL;
@@ -84,12 +88,19 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
   // - pickable 레이어는 fill 이 있어야 hit-test 가 잡히므로 현재 level 은 filled:true
   //   (선만 있으면 hover 영역이 선 위로만 제한돼 잡기 어려움)
   const boundaryLayers = useMemo(
-    () =>
-      dataLayers.map(({ level: lv, data }) => {
+    () => {
+      // anchor 가 실재할 때만 beforeId 지정 (없는데 지정하면 deck.gl addLayer 가 throw).
+      // anchor 는 onLoad 의 ensureDeckAnchor 로 생성되고 onLoad 가 mapReady=true 로 만든다.
+      // → mapReady 이면 anchor 존재. (mapRef 를 useMemo 안에서 읽지 말 것: deps 미추적 →
+      //   매 렌더 새 레이어 → deck setProps → hover 재발화 → setState 루프.)
+      const anchor = mapReady ? DECK_ANCHOR_ID : undefined;
+      return dataLayers.map(({ level: lv, data }) => {
         const isCurrent = lv === level;
         const pickable = isCurrent && !pickingDisabled;
         return new GeoJsonLayer({
           id: `adm-${side}-${lv}`,
+          // deck 레이어를 라벨 anchor 아래에 삽입 → 라벨이 경계선 위에 뜬다.
+          beforeId: anchor,
           data,
           stroked: true,
           filled: isCurrent || lv === "sido",
@@ -133,38 +144,50 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
               }
             : undefined,
         });
-      }),
-    [dataLayers, level, pickingDisabled, side, fillPalette, linePalette, onHover],
+      });
+    },
+    [dataLayers, level, pickingDisabled, side, fillPalette, linePalette, onHover, mapReady],
   );
 
   // buildLabels (polylabel 포함) 는 data/level 변경 시에만 재계산.
-  // zoom 변화마다 호출되지 않도록 useMemo 로 캐싱.
+  // 라벨은 MapLibre native symbol 레이어가 그린다 (collision 자동 회피 + SDF halo).
+  // 줌별 sgg↔emd 전환은 symbol layer 의 min/maxzoom 이 선언적으로 처리하므로
+  // 여기서는 정수 zoom state 를 둘 필요가 없다.
   const labelData = useMemo<LabelData>(() => ({
     sido: buildLabels(dataLayers.find((l) => l.level === "sido")?.data ?? null, "sido"),
     sgg:  buildLabels(dataLayers.find((l) => l.level === "sgg")?.data  ?? null, "sgg"),
     emd:  buildLabels(dataLayers.find((l) => l.level === "emd")?.data  ?? null, "emd"),
   }), [dataLayers]);
 
-  // TextLayer 생성은 zoomInt(정수) + labelData 변경 시에만.
-  const labelLayers = useMemo(
-    () =>
-      showLabels
-        ? buildLabelLayers({ side, zoomInt, level, labelData })
-        : [],
-    [showLabels, side, zoomInt, level, labelData],
-  );
+  // 라벨 심볼 (재)적용 — MapLibre native symbol (collision 자동 회피 + halo).
+  // show/level/zoomInt/labelData 변경 시, 그리고 idle/style.load 마다 멱등 재적용.
+  // idle 을 거는 이유: 초기 로드 때 onLoad 시점에 isStyleLoaded 가 아직 false 라
+  // applyLabels 가 return 되는 경우가 있어 idle 에서 보정. style.load 는 베이스맵 교체 대비.
+  useEffect(() => {
+    const m = mapRef.current?.getMap();
+    if (!m) return;
+    const run = () => applyLabels(m, side, showLabels, level, zoomInt, labelData);
+    run();
+    m.on("idle", run);
+    m.on("style.load", run);
+    return () => {
+      m.off("idle", run);
+      m.off("style.load", run);
+    };
+    // mapReady: onLoad 에서 map 준비되면 true → 첫 렌더에 놓친 effect 를 재실행.
+  }, [mapReady, side, showLabels, level, zoomInt, labelData]);
 
-  // diff 레이어는 경계선 위, 레이블 아래에 위치.
+  // diff 레이어는 경계선 위. 라벨은 deck.gl 이 아니라 MapLibre symbol 이므로 여기서 제외.
   // split 드래그처럼 parent 가 자주 리렌더될 때 참조를 안정화 → DeckOverlay 의 setProps 가
   // 실제로 바뀐 경우에만 발생.
   const layers = useMemo(
-    () => [...boundaryLayers, ...extraLayers, ...labelLayers],
-    [boundaryLayers, extraLayers, labelLayers],
+    () => [...boundaryLayers, ...extraLayers],
+    [boundaryLayers, extraLayers],
   );
 
   const handleMove = useCallback(
     (e: ViewStateChangeEvent) => {
-      // 정수 단위로만 state 갱신 → TextLayer 재생성 횟수 최소화.
+      // 정수 줌만 state 갱신 → emd↔sgg fallback 판단용. 재적용 횟수 최소화.
       const newZoomInt = Math.floor(e.viewState.zoom);
       setZoomInt((prev) => (prev !== newZoomInt ? newZoomInt : prev));
       onMove?.(e);
@@ -175,9 +198,15 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
   const onLoad = useCallback(() => {
     const m = mapRef.current?.getMap();
     if (!m) return;
+    // deck 레이어가 beforeId=anchor 로 삽입되기 전에 anchor 를 먼저 보장.
+    // (없으면 deck.gl 의 addLayer 가 "before non-existing layer" 로 throw.)
+    ensureDeckAnchor(m);
     applyKoreanLabels(m);
     setBasemapVisible(m, showBasemap);
     setZoomInt(Math.floor(m.getZoom()));
+    // map 준비 완료를 알림 → 아래 라벨 useEffect 가 재실행돼 심볼을 적용.
+    // (첫 렌더엔 mapRef.current 가 null 이라 effect 가 놓치므로 이 flag 로 트리거.)
+    setMapReady(true);
   }, [showBasemap]);
 
   useEffect(() => {
@@ -192,6 +221,12 @@ export const MapPane = forwardRef<MapPaneHandle, Props>(function MapPane(
       ref={mapRef}
       initialViewState={INITIAL_VIEW}
       mapStyle={POSITRON_STYLE_URL}
+      // 한글(CJK) 라벨은 glyph PBF 가 아니라 브라우저 로컬 폰트로 canvas 렌더된다.
+      // 이 옵션이 그 로컬 폰트 패밀리를 지정 → 시스템 한글 폰트로 라벨이 그려짐.
+      // 없으면 symbol layer 는 생성돼도 한글이 빈 글자로 렌더(renderedCount:0).
+      localIdeographFontFamily={
+        '"Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
+      }
       onMove={handleMove}
       onLoad={onLoad}
       onStyleData={onLoad}

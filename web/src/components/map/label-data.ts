@@ -7,6 +7,7 @@ import type {
   SggProperties,
   SidoProperties,
 } from "admdongkor";
+import { shortSido } from "@/lib/sido-short";
 
 export interface LabelDatum {
   /** 화면 위치 (lon, lat). polygon 의 근사 중심. */
@@ -17,36 +18,6 @@ export interface LabelDatum {
   priority: number;
   /** 디버그 키. */
   id: string;
-}
-
-/** sido 이름을 줄여서 2 행 레이블 상단에 사용. */
-function shortSido(name: string | null): string {
-  if (!name) return "";
-  const map: Record<string, string> = {
-    서울특별시: "서울",
-    부산광역시: "부산",
-    대구광역시: "대구",
-    인천광역시: "인천",
-    광주광역시: "광주",
-    대전광역시: "대전",
-    울산광역시: "울산",
-    세종특별자치시: "세종",
-    경기도: "경기",
-    강원도: "강원",
-    강원특별자치도: "강원",
-    충청북도: "충북",
-    충청남도: "충남",
-    전라북도: "전북",
-    전북특별자치도: "전북",
-    전라남도: "전남",
-    경상북도: "경북",
-    경상남도: "경남",
-    제주특별자치도: "제주",
-    전남광주통합특별시: "전남광주",
-  };
-  return (
-    map[name] ?? name.replace(/(특별시|광역시|특별자치시|특별자치도|도)$/u, "")
-  );
 }
 
 /** Ring bbox 의 면적 (경위도 단위). MultiPolygon 에서 가장 큰 조각 선택용. */

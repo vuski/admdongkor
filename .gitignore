@@ -27,3 +27,4 @@ js/dist/
 web/.next/
 web/out/
 *.tsbuildinfo
+.gstack/

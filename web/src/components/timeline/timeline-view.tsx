@@ -16,6 +16,7 @@ import {
   type TimelineSlice,
 } from "@/lib/timeline-client";
 import { loadVersionNames, type NameRow } from "@/lib/name-index";
+import { shortSido } from "@/lib/sido-short";
 import { decodeWKB } from "@/lib/wkb";
 import { fmtVersionLabel } from "@/lib/timeline-years";
 import type { DecodedGeometry } from "@/lib/wkb";
@@ -438,6 +439,22 @@ function TimelineCell({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
+  // Noto Sans KR 웹폰트 로드 완료 여부. canvas 는 폰트 로드 전 그리면 fallback 으로
+  // 렌더되고 자동 재draw 가 안 되므로, 로드되면 fontReady 를 flip 해 draw effect 재실행.
+  const [fontReady, setFontReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const done = () => !cancelled && setFontReady(true);
+    // 라벨용 700 굵기 Noto Sans KR 이 실제 로드됐는지 확인 후 flip.
+    document.fonts
+      .load('700 16px "Noto Sans KR"')
+      .then(() => document.fonts.ready)
+      .then(done)
+      .catch(done); // 실패해도 fallback 폰트로라도 그리게 flip.
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 셀 width 측정. 커지고 작아지는 양방향 모두 반응.
   useEffect(() => {
@@ -506,6 +523,7 @@ function TimelineCell({
     baseGeometries,
     isBaseVersion,
     names,
+    fontReady, // 웹폰트 로드 완료 시 재draw (라벨을 Noto Sans KR 로 다시 그림)
   ]);
 
   // wheel: 줌. pointer drag: 팬.
@@ -773,41 +791,6 @@ function drawBaseOverlay(
 // Labels
 // ---------------------------------------------------------------------------
 
-const SIDO_SHORT: Record<string, string> = {
-  서울특별시: "서울",
-  부산광역시: "부산",
-  대구광역시: "대구",
-  인천광역시: "인천",
-  광주광역시: "광주",
-  대전광역시: "대전",
-  울산광역시: "울산",
-  세종특별자치시: "세종",
-  경기도: "경기",
-  강원도: "강원",
-  강원특별자치도: "강원",
-  충청북도: "충북",
-  충청남도: "충남",
-  전라북도: "전북",
-  전북특별자치도: "전북",
-  전라남도: "전남",
-  경상북도: "경북",
-  경상남도: "경남",
-  제주특별자치도: "제주",
-  인천직할시: "인천",
-  부산직할시: "부산",
-  대구직할시: "대구",
-  광주직할시: "광주",
-  대전직할시: "대전",
-};
-
-function shortSido(name: string | null | undefined): string {
-  if (!name) return "";
-  return (
-    SIDO_SHORT[name] ??
-    name.replace(/(특별시|광역시|특별자치시|특별자치도|직할시|도)$/u, "")
-  );
-}
-
 /** polylabel: polygon 내부의 가장 안쪽 점. MultiPolygon 은 가장 큰 조각. */
 function featureLabelPos(geom: DecodedGeometry): [number, number] {
   const precision = 0.001;
@@ -876,6 +859,11 @@ function drawLabels(
         ? "sgg"
         : "emd";
 
+  // 라벨 크기: 검색·조회 탭의 MapLibre symbol 과 통일 (sido 18 / sgg 15 / emd 12).
+  const SIZE_SIDO = 18;
+  const SIZE_SGG = 15;
+  const SIZE_EMD = 12;
+
   if (tier === "sido") {
     // sido 풀네임 — sidocd 별로 그 sido 에 속한 모든 sgg 의 polygon 을 하나의
     // MultiPolygon 으로 합쳐 polylabel. polylabel 이 가장 큰 내접원을 알아서 고르므로
@@ -916,7 +904,7 @@ function drawLabels(
       items.push({
         pos: [p[0], p[1]],
         lines: [v.name],
-        size: 16,
+        size: SIZE_SIDO,
         priority: bestArea,
       });
     }
@@ -931,7 +919,7 @@ function drawLabels(
       items.push({
         pos,
         lines,
-        size: 14,
+        size: SIZE_SGG,
         priority: approxArea(g.parent.geometry),
       });
     }
@@ -947,16 +935,24 @@ function drawLabels(
         items.push({
           pos,
           lines: [sggnm, emdName],
-          size: 11,
+          size: SIZE_EMD,
           priority: approxArea(c.geometry),
         });
       }
     }
   }
 
-  // 충돌 회피 없음. 모두 그림.
+  // 겹침 회피: priority(면적) 큰 라벨 우선 배치. 이미 놓인 라벨의 화면 bbox 와
+  // 겹치면 skip → MapLibre symbol 의 collision(text-allow-overlap:false) + sort-key 와 동일 원리.
+  items.sort((a, b) => b.priority - a.priority);
+
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+
+  // 이미 배치된 라벨들의 화면 bbox (충돌 검사용).
+  const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
+  // 라벨 사이 최소 간격(px) — 붙어도 답답하지 않게 약간의 padding.
+  const PAD = 2;
 
   for (const it of items) {
     const [x, y] = worldToScreen(
@@ -968,13 +964,40 @@ function drawLabels(
     );
     if (x < 0 || x > cssWidth || y < 0 || y > cssHeight) continue;
 
-    ctx.font = `600 ${it.size}px "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif`;
-    const lineH = it.size * 1.15;
+    // 검색·조회 탭 symbol 과 통일한 폰트/halo/색. 한글은 symbol 의
+    // localIdeographFontFamily 와 같은 Noto Sans KR 로 그려 두 화면이 일치.
+    ctx.font = `700 ${it.size}px "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
+    const lineH = it.size * 1.1;
 
+    // 이 라벨의 화면 bbox 계산 (가장 넓은 줄 폭 × 전체 줄 높이).
+    let maxW = 0;
+    for (const line of it.lines) {
+      const w = ctx.measureText(line).width;
+      if (w > maxW) maxW = w;
+    }
+    const totalH = it.lines.length * lineH;
+    const bx0 = x - maxW / 2 - PAD;
+    const bx1 = x + maxW / 2 + PAD;
+    const by0 = y - totalH / 2 - PAD;
+    const by1 = y + totalH / 2 + PAD;
+
+    // 이미 놓인 라벨과 겹치면 skip (AABB 교차 검사).
+    let collides = false;
+    for (const p of placed) {
+      if (bx0 < p.x1 && bx1 > p.x0 && by0 < p.y1 && by1 > p.y0) {
+        collides = true;
+        break;
+      }
+    }
+    if (collides) continue;
+    placed.push({ x0: bx0, y0: by0, x1: bx1, y1: by1 });
+
+    // halo(흰 외곽선) → 채움. symbol 의 text-halo(#fff, width 2.5) + text-color(#111) 통일.
     ctx.lineWidth = 3;
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "rgba(255,255,255,0.92)";
-    ctx.fillStyle = "#0f172a";
+    ctx.miterLimit = 2;
+    ctx.strokeStyle = "#ffffff";
+    ctx.fillStyle = "#111111";
     const startY = y - ((it.lines.length - 1) / 2) * lineH;
     for (let i = 0; i < it.lines.length; i++) {
       const ly = startY + i * lineH;

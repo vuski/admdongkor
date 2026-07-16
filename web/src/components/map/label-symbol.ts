@@ -1,0 +1,163 @@
+import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
+import type { Level } from "admdongkor";
+import type { LabelDatum } from "./label-data";
+import type { LabelData } from "./label-layers";
+
+// 이 이상 줌에서만 emd 라벨. 그 전엔 sgg 라벨로 fallback.
+const EMD_MIN_ZOOM = 10;
+
+// 레벨별 라벨 크기 (위계 유지).
+const SIZE_BY_LEVEL: Record<Level, number> = { sido: 18, sgg: 15, emd: 12 };
+
+// ⚠️ text-font 는 Carto glyph 서버(Positron)에 라틴 PBF 가 실재하는 폰트여야 한다.
+//   없는 폰트(예: "NanumBarunGothic Regular", "Noto Sans Bold")를 지정하면 glyph
+//   404 로 라벨이 통째로 안 뜬다. "Open Sans Bold" 는 Positron 원본이 쓰는 폰트라 안전.
+//   한글은 MapLibre 가 glyph PBF 없이 로컬 렌더(TinySDF)하므로 라틴 폰트만 실재하면 됨.
+//   이름의 "Bold" 로 한글도 700 굵기로 렌더. (popuKrei 검증 패턴)
+const TEXT_FONT = ["Open Sans Bold"];
+
+const LEVELS: Level[] = ["sido", "sgg", "emd"];
+
+/** deck.gl(경계선/diff) 레이어를 이 anchor "아래"에 삽입시키기 위한 빈 레이어 id.
+ *  라벨 심볼은 anchor 위(스택 최상단)에 두므로 라벨이 항상 deck 경계선 위에 그려진다.
+ *  deck.gl MapboxOverlay 는 각 레이어 props 의 beforeId 로 삽입 위치를 지정할 수 있다. */
+export const DECK_ANCHOR_ID = "adm-deck-anchor";
+
+/** deck 레이어 삽입 anchor(빈 symbol 레이어)를 스택 최상단 근처에 1회 보장.
+ *  실제로 아무것도 안 그리는 placeholder — beforeId 대상용.
+ *  ⚠️ deck.gl MapboxOverlay 는 beforeId 레이어가 없으면 addLayer 가 throw 하므로,
+ *     deck 레이어가 처음 삽입되기 전(onLoad)에 반드시 먼저 만들어져 있어야 한다. */
+export function ensureDeckAnchor(map: MapLibreMap): void {
+  if (map.getLayer(DECK_ANCHOR_ID)) return;
+  if (!map.getSource(DECK_ANCHOR_ID)) {
+    map.addSource(DECK_ANCHOR_ID, {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
+  }
+  map.addLayer({
+    id: DECK_ANCHOR_ID,
+    type: "symbol",
+    source: DECK_ANCHOR_ID,
+  });
+}
+
+/** side + level 별 source id. */
+function srcId(side: "A" | "B", lv: Level): string {
+  return `adm-labels-${side}-${lv}`;
+}
+/** side + level 별 symbol layer id. */
+function layerId(side: "A" | "B", lv: Level): string {
+  return `adm-labels-${side}-${lv}-sym`;
+}
+
+/** LabelDatum[] → MapLibre symbol 용 GeoJSON Point FeatureCollection.
+ *  properties.label = text(줄바꿈 포함), sortKey = -priority
+ *  (symbol-sort-key 는 작을수록 우선 → 면적 큰 라벨이 충돌 시 살아남도록 부호 반전). */
+function labelsToGeoJSON(
+  labels: LabelDatum[],
+): GeoJSON.FeatureCollection<GeoJSON.Point> {
+  return {
+    type: "FeatureCollection",
+    features: labels.map((d) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: d.position },
+      properties: { label: d.text, sortKey: -d.priority },
+    })),
+  };
+}
+
+/** 마지막으로 적용한 라벨 상태 (side 별). idle 마다 재적용을 피하기 위한 dirty-check 키.
+ *  labelData 는 map-pane 에서 useMemo 로 안정 참조이므로 === 비교가 유효하다. */
+interface AppliedState {
+  show: boolean;
+  activeLevel: Level;
+  labelData: LabelData;
+}
+const lastApplied = new WeakMap<MapLibreMap, Record<"A" | "B", AppliedState | null>>();
+
+/** 이 map 에 라벨 심볼 레이어를 (재)적용. 멱등 — source 있으면 setData, layer 없으면 addLayer.
+ *  z-순서: deck.gl(경계선/diff) 은 DECK_ANCHOR_ID 아래에 삽입되고, 라벨은 anchor 위
+ *  (스택 최상단)로 moveLayer → 라벨이 항상 경계선 위에 그려진다.
+ *  스타일 미완료면 조용히 return (호출부의 idle/style.load 가 재시도).
+ *
+ *  ⚠️ idle 마다 호출되므로, 상태(show/activeLevel/labelData)가 직전과 같으면 early return.
+ *     안 그러면 이동/줌 멈출 때마다 setData(source 재파싱) + moveLayer 가 돌아 지도가 무거워진다. */
+export function applyLabels(
+  map: MapLibreMap,
+  side: "A" | "B",
+  show: boolean,
+  level: Level,
+  zoomInt: number,
+  labelData: LabelData,
+): void {
+  if (!map.isStyleLoaded()) return;
+
+  // 배경 경계 level 에 따라 실제로 그릴 라벨 레벨:
+  // sido → sido / sgg → sgg / emd → 줌<10 이면 sgg fallback, 아니면 emd.
+  let activeLevel: Level = level;
+  if (level === "emd" && zoomInt < EMD_MIN_ZOOM) activeLevel = "sgg";
+
+  // dirty-check: 직전 적용과 동일하고 anchor·레이어도 살아있으면 아무것도 안 함.
+  let sideMap = lastApplied.get(map);
+  if (!sideMap) {
+    sideMap = { A: null, B: null };
+    lastApplied.set(map, sideMap);
+  }
+  const prev = sideMap[side];
+  const anchorAlive = !!map.getLayer(DECK_ANCHOR_ID);
+  if (
+    prev &&
+    anchorAlive &&
+    prev.show === show &&
+    prev.activeLevel === activeLevel &&
+    prev.labelData === labelData
+  ) {
+    return; // 변경 없음 — idle 재호출 무시.
+  }
+  sideMap[side] = { show, activeLevel, labelData };
+
+  // deck 레이어 삽입 anchor 보장 (deck 가 이 아래로 들어가도록).
+  ensureDeckAnchor(map);
+
+  for (const lv of LEVELS) {
+    const on = show && lv === activeLevel;
+
+    if (on && labelData[lv].length > 0) {
+      const data = labelsToGeoJSON(labelData[lv]);
+      const src = map.getSource(srcId(side, lv)) as GeoJSONSource | undefined;
+      if (src) src.setData(data);
+      else map.addSource(srcId(side, lv), { type: "geojson", data });
+
+      if (!map.getLayer(layerId(side, lv))) {
+        map.addLayer({
+          id: layerId(side, lv),
+          type: "symbol",
+          source: srcId(side, lv),
+          layout: {
+            "text-field": ["get", "label"],
+            "text-size": SIZE_BY_LEVEL[lv],
+            "text-line-height": 1.05,
+            "text-font": TEXT_FONT,
+            "text-allow-overlap": false,
+            "text-padding": 2,
+            // 작을수록 우선(면적 큰 게 먼저) → 겹칠 때 큰 행정구역 라벨이 살아남음.
+            "symbol-sort-key": ["get", "sortKey"],
+          },
+          paint: {
+            "text-color": "#111111",
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 2.5, // 두꺼운 흰 halo 로 경계선 위에서도 글자 식별
+            "text-halo-blur": 0,
+          },
+        });
+      } else {
+        // 안전망: 라벨 위에 뭔가 쌓였으면 맨 위로 복귀. 멱등.
+        map.moveLayer(layerId(side, lv));
+      }
+    } else {
+      if (map.getLayer(layerId(side, lv))) map.removeLayer(layerId(side, lv));
+      if (map.getSource(srcId(side, lv))) map.removeSource(srcId(side, lv));
+    }
+  }
+}

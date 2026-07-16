@@ -29,12 +29,15 @@ export function setBasemapVisible(map: MapLibreMap, visible: boolean): void {
   }
 }
 
-/** 스타일 로드 후 symbol 레이어의 text-field 를 한국어로 전환. */
+/** 스타일 로드 후 symbol 레이어의 text-field 를 한국어로 전환.
+ *  단 우리가 얹은 행정구역 라벨(`adm-labels-`)은 자체 text-field(get label)를 쓰므로
+ *  건드리면 안 된다 — 덮어쓰면 name:ko 가 없어 라벨이 통째로 빈 텍스트로 사라진다. */
 export function applyKoreanLabels(map: MapLibreMap): void {
   const style = map.getStyle();
   if (!style?.layers) return;
   for (const layer of style.layers) {
     if (layer.type !== "symbol") continue;
+    if (layer.id.startsWith("adm-labels-")) continue;
     const layout = (layer as { layout?: Record<string, unknown> }).layout;
     if (!layout || !layout["text-field"]) continue;
     try {

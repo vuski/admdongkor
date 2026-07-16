@@ -1,6 +1,7 @@
 import { GeoJsonLayer } from "@deck.gl/layers";
 import type { CompareResult } from "admdongkor";
 import type { AdmFeatureCollection } from "admdongkor";
+import { DECK_ANCHOR_ID } from "./label-symbol";
 
 // 변화 유형별 색상 (side 기준이 아닌 시간 기준)
 const COLOR_CHANGED: [number, number, number, number] = [234, 179, 8, 180];    // 노랑 (경계변경)
@@ -75,6 +76,7 @@ export function buildCompareLayers(
     layers.push(
       new GeoJsonLayer({
         id: `diff-changed-${side}`,
+        beforeId: DECK_ANCHOR_ID, // 라벨 anchor 아래 → 라벨이 diff 위에 뜬다
         data: { type: "FeatureCollection", features: changedFeatures },
         stroked: true,
         filled: true,
@@ -94,6 +96,7 @@ export function buildCompareLayers(
     layers.push(
       new GeoJsonLayer({
         id: `diff-only-${side}`,
+        beforeId: DECK_ANCHOR_ID, // 라벨 anchor 아래 → 라벨이 diff 위에 뜬다
         data: { type: "FeatureCollection", features: onlyFeatures },
         stroked: true,
         filled: true,
