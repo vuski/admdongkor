@@ -125,9 +125,10 @@ function pastelFromKeyUnique(key: string, usedHues: number[]): string {
 export function TimelineView() {
   const query = useTimelineStore((s) => s.query);
   const versions = useTimelineStore((s) => s.selectedVersions);
-  const viewport = useTimelineStore((s) => s.viewport);
+  // ⚠️ viewport 는 여기서 구독하지 않는다 — 구독하면 pan/zoom 마다 TimelineView 와
+  //   모든 자식 셀이 리렌더된다. 각 셀이 store.subscribe 로 직접 듣고 canvas 만 다시
+  //   그린다(아래 TimelineCell). setViewport 는 새 쿼리 초기화 때만 쓰므로 구독 무관.
   const setViewport = useTimelineStore((s) => s.setViewport);
-  const updateViewport = useTimelineStore((s) => s.updateViewport);
   const showLabels = useAppStore((s) => s.showLabels);
   const setTimelineViewActive = useAppStore((s) => s.setTimelineViewActive);
   const versionList = useAppStore((s) => s.versionList);
@@ -355,12 +356,10 @@ export function TimelineView() {
               slice={slices.get(v) ?? null}
               error={errors.get(v) ?? null}
               query={query}
-              viewport={viewport}
               showLabels={showLabels}
               baseGeometries={baseGeometries}
               isBaseVersion={v === query.baseVersion}
               names={namesByVersion.get(v) ?? null}
-              onViewportChange={(patch) => updateViewport(patch)}
             />
           ))}
         </div>
@@ -416,12 +415,10 @@ interface CellProps {
   slice: TimelineSlice | null;
   error: string | null;
   query: NonNullable<ReturnType<typeof useTimelineStore.getState>["query"]>;
-  viewport: TimelineViewport | null;
   showLabels: boolean;
   baseGeometries: DecodedGeometry[];
   isBaseVersion: boolean;
   names: NameMaps | null;
-  onViewportChange: (patch: Partial<TimelineViewport>) => void;
 }
 
 function TimelineCell({
@@ -429,12 +426,10 @@ function TimelineCell({
   slice,
   error,
   query,
-  viewport,
   showLabels,
   baseGeometries,
   isBaseVersion,
   names,
-  onViewportChange,
 }: CellProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -477,7 +472,8 @@ function TimelineCell({
   //   기준 연도가 없거나 exists=false 면 (드문 케이스) 로드된 가장 최근 slice 중 첫 셀이 담당.
   const setViewportStore = useTimelineStore((s) => s.setViewport);
   useEffect(() => {
-    if (viewport) return;
+    // viewport 는 구독하지 않으므로 store 에서 직접 읽어 "이미 세팅됐나" 판단.
+    if (useTimelineStore.getState().viewport) return;
     if (!slice || !slice.exists || !slice.bbox) return;
     if (width === 0) return;
     if (!isBaseVersion) return; // 기준 연도 셀만 viewport 초기화 담당
@@ -496,27 +492,47 @@ function TimelineCell({
       scale,
       initialBBox: slice.bbox,
     });
-  }, [slice, width, viewport, isBaseVersion, setViewportStore]);
+  }, [slice, width, isBaseVersion, setViewportStore]);
 
   // 그리기.
+  //
+  // ⚠️ 성능 핵심: viewport 는 store 를 "구독" 하지 않고 draw 시점에 getState() 로 읽는다.
+  //   viewport 를 구독하면 pan/zoom 마다 이 셀(과 부모)이 React 리렌더 → 셀 N개면
+  //   N번 리렌더 + N번 draw. 대신 store.subscribe 로 viewport 변화를 듣고 canvas 만
+  //   직접 다시 그리면 React 리렌더 없이 draw 만 돈다.
+  //   (rAF coalesce 는 pointer 핸들러 쪽에서 이미 프레임당 1회로 store 갱신을 줄였다.)
+  //
+  //   viewport 외 입력(slice/query/width/showLabels/...)이 바뀔 때도 다시 그려야 하므로
+  //   그 값들은 deps 로 두어 effect 재실행 → 즉시 1회 draw + subscribe 재설정.
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !slice || !viewport || width === 0) return;
-    drawCell(
-      canvas,
-      slice,
-      query,
-      viewport,
-      width,
-      CELL_HEIGHT,
-      showLabels,
-      baseGeometries,
-      isBaseVersion,
-      names,
-    );
+    if (!canvas || !slice || width === 0) return;
+
+    const draw = () => {
+      const vp = useTimelineStore.getState().viewport;
+      if (!vp) return;
+      drawCell(
+        canvas,
+        slice,
+        query,
+        vp,
+        width,
+        CELL_HEIGHT,
+        showLabels,
+        baseGeometries,
+        isBaseVersion,
+        names,
+      );
+    };
+
+    draw(); // 입력 변경 시 즉시 1회.
+    // viewport 만 바뀔 때는 리렌더 없이 여기서 canvas 만 다시 그린다.
+    const unsub = useTimelineStore.subscribe((s, prev) => {
+      if (s.viewport !== prev.viewport) draw();
+    });
+    return unsub;
   }, [
     slice,
-    viewport,
     query,
     width,
     showLabels,
@@ -527,17 +543,42 @@ function TimelineCell({
   ]);
 
   // wheel: 줌. pointer drag: 팬.
-  // 주의: viewport 를 closure 에 캡처하지 않는다 — store 에서 매번 최신값을 읽어야
-  // 연속 pan 시 delta 가 누적된다 (stale closure 방지).
+  //
+  // ⚠️ pan 성능: 드래그 중에는 폴리곤을 다시 그리지 않는다. scale 이 안 바뀌므로
+  //   이미 그려진 canvas 비트맵을 CSS transform:translate 로 밀기만 하면 된다
+  //   (정점 계산·stroke 0, GPU 합성만 → 셀이 몇 개든 공짜). viewport 는 모든 셀이
+  //   공유하므로, 드래그 중엔 모든 timeline canvas 를 DOM 으로 직접 translate 하고
+  //   (React 우회) pointerup 에서 딱 한 번 store 를 갱신해 실제 위치로 재draw + 리셋.
+  //   zoom(휠)은 scale 이 바뀌어 translate 로 안 되므로 지금처럼 재draw.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const getVP = () => useTimelineStore.getState().viewport;
 
+    // 드래그 중 모든 셀 canvas 를 같은 픽셀 델타로 translate (viewport 공유).
+    const allCanvases = (): HTMLElement[] =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>("[data-timeline-canvas]"),
+      );
+    const applyTranslate = (dx: number, dy: number) => {
+      const t = dx === 0 && dy === 0 ? "" : `translate(${dx}px, ${dy}px)`;
+      for (const el of allCanvases()) el.style.transform = t;
+    };
+
+    // wheel(zoom) 은 rAF 로 coalesce 해 프레임당 1회만 재draw.
+    let pendingZoom: Partial<TimelineViewport> | null = null;
+    let rafId = 0;
+    const flushZoom = () => {
+      rafId = 0;
+      if (!pendingZoom) return;
+      const patch = pendingZoom;
+      pendingZoom = null;
+      useTimelineStore.getState().updateViewport(patch);
+    };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const vp = getVP();
+      const vp = pendingZoom ? { ...getVP()!, ...pendingZoom } : getVP();
       if (!vp) return;
       const rect = canvas.getBoundingClientRect();
       const px = e.clientX - rect.left;
@@ -553,42 +594,51 @@ function TimelineCell({
         width,
         CELL_HEIGHT,
       );
-      useTimelineStore.getState().updateViewport({
-        scale: newScale,
-        center: newCenter,
-      });
+      pendingZoom = { scale: newScale, center: newCenter };
+      if (!rafId) rafId = requestAnimationFrame(flushZoom);
     };
 
+    // pan: 드래그 시작점 대비 누적 픽셀 델타를 transform 으로만 반영.
     let panning = false;
-    let lastX = 0;
-    let lastY = 0;
+    let startX = 0;
+    let startY = 0;
+    let panDX = 0;
+    let panDY = 0;
     const onPointerDown = (e: PointerEvent) => {
       panning = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
+      startX = e.clientX;
+      startY = e.clientY;
+      panDX = 0;
+      panDY = 0;
       canvas.setPointerCapture(e.pointerId);
       canvas.style.cursor = "grabbing";
     };
     const onPointerMove = (e: PointerEvent) => {
       if (!panning) return;
-      const vp = getVP();
-      if (!vp) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      const latRad = (vp.center[1] * Math.PI) / 180;
-      const scaleX = vp.scale * Math.cos(latRad);
-      const newCenter: [number, number] = [
-        vp.center[0] - dx / scaleX,
-        vp.center[1] + dy / vp.scale,
-      ];
-      useTimelineStore.getState().updateViewport({ center: newCenter });
+      panDX = e.clientX - startX;
+      panDY = e.clientY - startY;
+      applyTranslate(panDX, panDY); // 모든 셀 통째 이동. 재draw 없음.
     };
     const onPointerUp = (e: PointerEvent) => {
+      if (!panning) return;
       panning = false;
       canvas.releasePointerCapture(e.pointerId);
       canvas.style.cursor = "grab";
+      const vp = getVP();
+      if (vp && (panDX !== 0 || panDY !== 0)) {
+        // 누적 픽셀 델타 → world center 델타. (worldToScreen 역변환)
+        const scaleX = vp.scale * Math.cos((vp.center[1] * Math.PI) / 180);
+        const newCenter: [number, number] = [
+          vp.center[0] - panDX / scaleX,
+          vp.center[1] + panDY / vp.scale,
+        ];
+        // store 갱신 → 모든 셀 subscribe 가 새 center 로 재draw (동기).
+        useTimelineStore.getState().updateViewport({ center: newCenter });
+      }
+      // 재draw 가 끝났으니 transform 리셋 (translate 0). 점프 없음.
+      applyTranslate(0, 0);
+      panDX = 0;
+      panDY = 0;
     };
 
     canvas.addEventListener("wheel", onWheel, { passive: false });
@@ -597,6 +647,7 @@ function TimelineCell({
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointercancel", onPointerUp);
     return () => {
+      if (rafId) cancelAnimationFrame(rafId);
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
@@ -634,6 +685,7 @@ function TimelineCell({
       )}
       <canvas
         ref={canvasRef}
+        data-timeline-canvas
         width={Math.max(1, width) * devicePixelRatioSafe()}
         height={CELL_HEIGHT * devicePixelRatioSafe()}
         style={{
@@ -641,6 +693,7 @@ function TimelineCell({
           height: CELL_HEIGHT,
           display: "block",
           cursor: "grab",
+          willChange: "transform", // pan 중 CSS translate GPU 합성 힌트
         }}
       />
     </div>
@@ -700,6 +753,9 @@ function drawCell(
       : query.selections.map((s) => s.code);
   const colorMap = assignColors(slice, colorKey, baseKeys, names);
 
+  // 투영 상수 1회 계산 (정점 hot path 에서 재사용).
+  const proj = makeProjection(viewport, cssWidth, cssHeight);
+
   // children 먼저. weight 기준으로 fill 결정.
   for (const g of slice.groups) {
     const cws = g.childWeights;
@@ -716,7 +772,7 @@ function drawCell(
       } else {
         fillColor = weakFill;
       }
-      drawGeometry(ctx, c.geometry, viewport, cssWidth, cssHeight, {
+      drawGeometry(ctx, c.geometry, proj, {
         fillColor,
         strokeColor: childColor,
         lineWidth: childLineWidth,
@@ -726,7 +782,7 @@ function drawCell(
   // parent — weight 에 따라 두 규격.
   for (const g of slice.groups) {
     const isStrong = (g.weight ?? 1) >= 0.9;
-    drawGeometry(ctx, g.parent.geometry, viewport, cssWidth, cssHeight, {
+    drawGeometry(ctx, g.parent.geometry, proj, {
       fillColor: null,
       strokeColor: isStrong ? parentColor : childColor,
       lineWidth: isStrong ? parentLineWidth : childLineWidth,
@@ -736,7 +792,7 @@ function drawCell(
   // base 연도 region 의 빨간 실선 오버레이 (다른 연도 cell 에만).
   if (!isBaseVersion) {
     for (const g of baseGeometries) {
-      drawBaseOverlay(ctx, g, viewport, cssWidth, cssHeight);
+      drawBaseOverlay(ctx, g, proj);
     }
   }
 
@@ -753,32 +809,31 @@ function drawCell(
 function drawBaseOverlay(
   ctx: CanvasRenderingContext2D,
   geom: DecodedGeometry,
-  vp: TimelineViewport,
-  cssWidth: number,
-  cssHeight: number,
+  proj: Projection,
 ) {
+  const { cLon, cLat, scaleX, scaleY, halfW, halfH } = proj;
   ctx.save();
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.beginPath();
   const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
   // 화면 전체 폭 대비 ring 점 개수가 많으면 stride 로 솎음. 점선이라 디테일 손실 무시 가능.
-  // 솎음 기준: 대략 1px 당 1점이면 충분. 위 수치는 runtime 에서 계산하지 않고 고정 샘플링.
   for (const poly of polys) {
     // outer ring 만 사용 (hole 은 점선 오버레이엔 불필요).
     const ring = poly[0];
-    if (!ring || ring.length < 2) continue;
-    const stride = ring.length > 400 ? Math.ceil(ring.length / 400) : 1;
-    for (let i = 0; i < ring.length; i += stride) {
-      const [lon, lat] = ring[i]!;
-      const [x, y] = worldToScreen(lon, lat, vp, cssWidth, cssHeight);
+    const n = ring ? ring.length : 0;
+    if (!ring || n < 2) continue;
+    const stride = n > 400 ? Math.ceil(n / 400) : 1;
+    for (let i = 0; i < n; i += stride) {
+      const pt = ring[i]!;
+      const x = halfW + (pt[0]! - cLon) * scaleX;
+      const y = halfH - (pt[1]! - cLat) * scaleY;
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
-    // 마지막 점이 끝점으로 안 들어왔으면 보정.
-    const last = ring[ring.length - 1]!;
-    const [lx, ly] = worldToScreen(last[0]!, last[1]!, vp, cssWidth, cssHeight);
-    ctx.lineTo(lx, ly);
+    // 마지막 점 보정.
+    const last = ring[n - 1]!;
+    ctx.lineTo(halfW + (last[0]! - cLon) * scaleX, halfH - (last[1]! - cLat) * scaleY);
     ctx.closePath();
   }
   ctx.strokeStyle = "rgba(220, 38, 38, 0.55)";
@@ -1155,23 +1210,25 @@ function sidonmOf(sidocd: string, names: NameMaps | null): string | null {
 function drawGeometry(
   ctx: CanvasRenderingContext2D,
   geom: DecodedGeometry,
-  viewport: TimelineViewport,
-  cssWidth: number,
-  cssHeight: number,
+  proj: Projection,
   style: {
     fillColor: string | null;
     strokeColor: string;
     lineWidth: number;
   },
 ) {
+  const { cLon, cLat, scaleX, scaleY, halfW, halfH } = proj;
   ctx.beginPath();
   const polys = geom.type === "Polygon" ? [geom.coordinates] : geom.coordinates;
   for (const poly of polys) {
     for (const ring of poly) {
-      if (ring.length < 2) continue;
-      for (let i = 0; i < ring.length; i++) {
-        const [lon, lat] = ring[i]!;
-        const [x, y] = worldToScreen(lon, lat, viewport, cssWidth, cssHeight);
+      const n = ring.length;
+      if (n < 2) continue;
+      // 정점 변환을 인라인 산술로 (worldToScreen 함수호출/cos/배열할당 제거).
+      for (let i = 0; i < n; i++) {
+        const pt = ring[i]!;
+        const x = halfW + (pt[0]! - cLon) * scaleX;
+        const y = halfH - (pt[1]! - cLat) * scaleY;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -1190,6 +1247,28 @@ function drawGeometry(
 // ---------------------------------------------------------------------------
 // 투영 유틸 (간이 equirectangular; lat 중심에서 cos 보정으로 종횡비 맞춤)
 // ---------------------------------------------------------------------------
+
+/** draw 1회 동안 고정인 투영 상수. 정점마다 cos/함수호출/배열할당을 반복하지 않도록
+ *  한 번만 계산해 재사용한다 — 폴리곤 정점 변환이 성능의 핵심 hot path 이므로. */
+interface Projection {
+  cLon: number;
+  cLat: number;
+  scaleX: number;
+  scaleY: number;
+  halfW: number;
+  halfH: number;
+}
+
+function makeProjection(
+  vp: TimelineViewport,
+  w: number,
+  h: number,
+): Projection {
+  const [cLon, cLat] = vp.center;
+  const scaleX = vp.scale * Math.cos((cLat * Math.PI) / 180);
+  return { cLon, cLat, scaleX, scaleY: vp.scale, halfW: w / 2, halfH: h / 2 };
+}
+
 function worldToScreen(
   lon: number,
   lat: number,
