@@ -1,8 +1,8 @@
 {
-  "data_version": "2026.07.01",
+  "data_version": "2026.08.02",
   "schema_version": "v3",
   "min_lib_version": "0.6.0",
-  "created_at": "2026-07-01T04:55:10Z",
+  "created_at": "2026-08-02T12:28:20Z",
   "versions": [
     "19751231",
     "19801231",
@@ -70,6 +70,10 @@
   ],
   "history": [
     {
+      "version": "2026.08.02",
+      "changes": "출장소 코드표 추가"
+    },
+    {
       "version": "2026.07.01",
       "changes": "20260701 추가 + manifest versions 배열 도입 (버전 목록 데이터 기반 sync)"
     },
@@ -86,6 +90,10 @@
     "_index_v3.parquet": {
       "size": 1859367,
       "sha256": "dacbd5b5bd3e1c50a27972285ced3e62692bd253edbf439a57ad3a6f85ad9bd0"
+    },
+    "_offices.parquet": {
+      "size": 22216,
+      "sha256": "81ba2176c70824435410242e6d3fe8ef09e1584188b08b445cd4603bed35631e"
     },
     "timeline_v3_sido.parquet": {
       "size": 10680,
