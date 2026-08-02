@@ -1,6 +1,6 @@
 {
   "name": "admdongkor",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "대한민국 행정동 경계 — 1975년부터 현재까지 60개 이상 시점의 emd/sgg/sido 경계를 light parquet 로 제공",
   "keywords": [
     "korea",

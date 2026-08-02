@@ -123,3 +123,118 @@ describe("find()", () => {
     ).rejects.toThrow(/1-3 whitespace-separated tokens/);
   });
 });
+
+describe("find() — 코드 검색", () => {
+  it("digits-only query auto-detects as code search", async () => {
+    const rows = await find("1111051500", { baseUrl, fetch: localFetch });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.level).toBe("emd");
+      expect(r.code).toBe("1111051500");
+    }
+    expect(new Set(rows.map((r) => r.name))).toContain("청운효자동");
+  });
+
+  it("prefix matches the sgg itself and its descendant emds", async () => {
+    const rows = await find("11110", { baseUrl, fetch: localFetch });
+    const levels = new Set(rows.map((r) => r.level));
+    expect(levels.has("sgg")).toBe(true);
+    expect(levels.has("emd")).toBe(true);
+    for (const r of rows) {
+      const hit =
+        r.code?.startsWith("11110") ||
+        r.code7?.startsWith("11110") ||
+        r.code8?.startsWith("11110");
+      expect(hit).toBe(true);
+    }
+  });
+
+  it("exact means full-width match, not prefix", async () => {
+    const rows = await find("11110", {
+      exact: true,
+      baseUrl,
+      fetch: localFetch,
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.level).toBe("sgg");
+      expect(r.code).toBe("11110");
+    }
+  });
+
+  it("matches 통계청 code7", async () => {
+    const rows = await find("1101053", {
+      exact: true,
+      baseUrl,
+      fetch: localFetch,
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.code7).toBe("1101053");
+    }
+  });
+
+  it("matches 통계청 code8", async () => {
+    const rows = await find("11010530", {
+      exact: true,
+      baseUrl,
+      fetch: localFetch,
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.code8).toBe("11010530");
+    }
+  });
+
+  it("level narrows a code search", async () => {
+    const rows = await find("11110", {
+      level: "emd",
+      baseUrl,
+      fetch: localFetch,
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.level).toBe("emd");
+  });
+
+  it("year narrows a code search", async () => {
+    const rows = await find("11110", {
+      year: [2025],
+      baseUrl,
+      fetch: localFetch,
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.version_key.slice(0, 4)).toBe("2025");
+  });
+
+  it('by:"name" forces name search on a digits query', async () => {
+    const rows = await find("11110", {
+      by: "name",
+      baseUrl,
+      fetch: localFetch,
+    });
+    expect(rows.length).toBe(0);
+  });
+
+  it('by:"code" rejects a non-digits query', async () => {
+    await expect(
+      find("종로구", { by: "code", baseUrl, fetch: localFetch }),
+    ).rejects.toThrow(/digits-only/);
+  });
+
+  it("invalid by throws", async () => {
+    await expect(
+      // @ts-expect-error 잘못된 by 값 런타임 검증
+      find("11110", { by: "codes", baseUrl, fetch: localFetch }),
+    ).rejects.toThrow(/by must be/);
+  });
+
+  it("name search is unaffected", async () => {
+    const rows = await find("종로구", { baseUrl, fetch: localFetch });
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it("unmatched code returns empty", async () => {
+    const rows = await find("99999999", { baseUrl, fetch: localFetch });
+    expect(rows.length).toBe(0);
+  });
+});

@@ -25,6 +25,8 @@ _APP_NAME = "admdongkor"
 
 INDEX_FILES: tuple[str, ...] = (
     "_index_v3.parquet",
+    # 출장소 코드표. 지도 경계가 없어 _index_v3 에 못 들어가지만 코드 검색 대상.
+    "_offices.parquet",
     "timeline_v3_sido.parquet",
     "timeline_v3_sgg.parquet",
     "timeline_v3_emd.parquet",

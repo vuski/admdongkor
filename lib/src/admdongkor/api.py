@@ -74,11 +74,28 @@ def find(
     level: str | None = None,
     exact: bool = False,
     year: list[int] | None = None,
+    by: str | None = None,
 ) -> pd.DataFrame:
-    """행정구역명으로 버전 검색. NFC 정규화 후 대소문자·공백 무시 substring 매칭.
+    """행정구역명 **또는 코드**로 버전 검색.
+
+    **숫자로만 이루어진 쿼리는 자동으로 코드 검색**이 된다 (행정구역명 중 숫자
+    로만 된 것은 없으므로 이름 검색과 충돌하지 않는다). `by=` 로 강제 가능.
+
+        adk.find("종로구")       # 이름 검색
+        adk.find("11110")        # 코드 검색 — 시군구 11110 + 그 하위 읍면동 전부
+        adk.find("1111051500")   # 코드 검색 — 해당 읍면동
+        adk.find("11110", by="name")   # 이름 검색 강제 (결과 없음)
+
+    코드 검색은 **prefix 매칭**이라 자릿수를 정확히 맞추지 않아도 된다.
+    `"11"` → 시도 11 + 시군구 `11xxx` + 읍면동 `11xxxxxxxx` 전부.
+    `level=` 로 좁히고, `exact=True` 면 자릿수 완전일치만.
+    매칭 대상 컬럼은 `code`(행안부) / `code7` / `code8`(통계청) 셋 다이므로
+    통계청 코드를 들고 있어도 찾을 수 있다.
+
+    이름 검색은 NFC 정규화 후 대소문자·공백 무시 substring 매칭.
 
     Args:
-        name: 검색할 이름. 공백으로 토큰 구분 가능:
+        name: 검색할 이름 **또는 코드**. 이름은 공백으로 토큰 구분 가능:
             - 1 토큰 `"종로"` → 전 레벨 substring
             - 2 토큰 `"서울특별시 종로구"` → **sgg 만** 자동 필터
             - 3 토큰 `"서울특별시 종로구 사직동"` → **emd 만** 자동 필터
@@ -88,8 +105,11 @@ def find(
             매칭은 `sidonm + sggnm + name` 을 이어붙여 공백을 제거한 문자열에 대한
             substring. 그래서 `"수원시 권선구"` 도 `"수원시권선구"` 로 저장된 sgg 를 찾아낸다.
         level: `"sido"` / `"sgg"` / `"emd"` 중 하나, 또는 `None` (자동).
-        exact: True 면 `name` 컬럼 단독 완전일치. 공백 포함 쿼리와 결합시 `ValueError`.
+        exact: 이름 검색이면 `name` 컬럼 단독 완전일치 (공백 포함 쿼리와 결합시
+            `ValueError`). 코드 검색이면 prefix 대신 **자릿수 완전일치**.
         year: `[2025]` 단일 연도, `[2000, 2005]` 범위(inclusive). 3개 이상은 ValueError.
+        by: `"name"` / `"code"` 로 검색 방식 강제. `None` (기본) 이면 자동 판별.
+            `by="code"` 인데 쿼리에 숫자 아닌 문자가 있으면 `ValueError`.
 
     Returns:
         `FindResult` (= `pd.DataFrame` 서브클래스). 컬럼 순서:
@@ -105,7 +125,39 @@ def find(
         - `.first()` → 가장 이른 version_key (비어있으면 `None`)
         - `.last()` → 가장 늦은 version_key (비어있으면 `None`)
     """
-    return _index.find(name, level=level, exact=exact, year=year)
+    return _index.find(name, level=level, exact=exact, year=year, by=by)
+
+
+def find_offices(
+    query: str,
+    exact: bool = False,
+    by: str | None = None,
+) -> pd.DataFrame:
+    """출장소(出張所) 검색. 코드 prefix 또는 이름 substring.
+
+    **출장소는 경계 지도가 없다** — 행안부 행정동 코드 체계에만 존재하고
+    geojson/shp 에는 나오지 않는다. 따라서 `get()` 으로 지도를 받을 수 없고,
+    `find()` 결과에도 포함되지 않는다. 코드를 넣었을 때 "이게 어디인지" 는
+    알 수 있어야 하므로 별도 조회 경로로 제공한다.
+
+    `version_key` 대신 `created` / `abolished` (YYYYMMDD 문자열) 로 유효 기간을
+    표현한다. `abolished` 가 NA 면 현존 (2026-07 기준 75개), 값이 있으면 말소.
+
+    Args:
+        query: 행정동 10자리 코드(prefix 가능) 또는 출장소 이름.
+            숫자로만 이루어지면 코드 검색으로 자동 판별.
+        exact: True 면 코드 완전일치 / 이름 완전일치.
+        by: `"name"` / `"code"` 로 검색 방식 강제.
+
+    Returns:
+        `code, name, sggnm, sidonm, sggcd, sidocd, level, created, abolished`
+
+    Examples:
+        >>> adk.find_offices("2920083000")   # 광주 광산구 임곡출장소 (말소)
+        >>> adk.find_offices("28265")        # 인천 서구 검단출장소
+        >>> adk.find_offices("영종")          # 이름으로
+    """
+    return _index.find_offices(query, exact=exact, by=by)
 
 
 def get(

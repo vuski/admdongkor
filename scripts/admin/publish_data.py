@@ -35,6 +35,9 @@ CHANGELOG_FILE = DIST_DATA_DIR / "CHANGELOG.md"
 INDEX_FILES = (
     "_index.parquet",
     "_index_v3.parquet",
+    # 출장소 코드표. 경계 지도가 없어 _index_v3 에는 못 들어가지만 코드 검색 대상.
+    # preprocessing/scripts/build_offices.py 로 생성 (행안부 KIKcd_H xlsx).
+    "_offices.parquet",
     "timeline_v3_sido.parquet",
     "timeline_v3_sgg.parquet",
     "timeline_v3_emd.parquet",

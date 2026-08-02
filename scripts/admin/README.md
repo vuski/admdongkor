@@ -23,6 +23,12 @@ git add dist/data/ ; git commit -m "data: <yyyy.mm.dd> - <수정 내용>" ; git 
 - `rebuild_all.py` — `_versions.py` + 인덱스 + 시계열 인덱스 재빌드
 - `publish_data.py` — 재빌드된 인덱스를 `dist/data/` 로 복사 + `manifest.json` / `CHANGELOG.md` 갱신
 
+> **`_offices.parquet` 은 `rebuild_all.py` 가 만들지 않는다.** 출장소는 경계
+> 지도가 없어 지도 파이프라인 밖에 있다 — 행안부 `KIKcd_H` xlsx 에서
+> `preprocessing/scripts/build_offices.py` 로 직접 생성한다. `publish_data.py`
+> 는 이미 만들어진 파일을 `dist/data/` 로 복사만 한다. 갱신 절차는
+> [.readme/ADMIN_WORKFLOW.md](../../../.readme/ADMIN_WORKFLOW.md) 시나리오 C.
+
 **예상 소요 시간**: 약 **35분** (rebuild_all 의 phase 3 시계열 인덱스가 대부분).
 publish_data 는 수 초.
 

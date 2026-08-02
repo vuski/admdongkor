@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "admdongkor"
-version = "0.6.1"
+version = "0.7.0"
 description = "Korea administrative boundary parquet downloader + 시계열 영역 매칭 (읍면동/시군구/시도, 1975–2026)"
 readme = "README.md"
 license = { text = "MIT" }

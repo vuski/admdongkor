@@ -9,6 +9,8 @@ export {
   clearIndexCache,
 } from "./find.js";
 export type { FindRow, FindOptions } from "./find.js";
+export { findOffices } from "./offices.js";
+export type { OfficeRow, FindOfficesOptions } from "./offices.js";
 export { compare } from "./compare.js";
 export type { CompareRow, CompareResult, CompareOptions } from "./compare.js";
 export { matchAdm } from "./match.js";

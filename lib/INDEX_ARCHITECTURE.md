@@ -21,7 +21,8 @@ flowchart LR
     end
 
     subgraph INDEX["글로벌 인덱스 (GitHub dist/data/, 총 ~5.8 MB)"]
-        IX["_index_v3.parquet<br/><i>find() 용 이름 검색</i>"]
+        IX["_index_v3.parquet<br/><i>find() 용 이름·코드 검색</i>"]
+        OF["_offices.parquet<br/><i>출장소 — 지도 없는 코드</i>"]
         TL["timeline_v3_*.parquet × 3<br/><i>element ↔ global shape ↔ version</i>"]
         SP["shape_pairs_v3_*.parquet × 3<br/><i>공간 겹친 shape 쌍 weight</i>"]
     end
@@ -29,6 +30,7 @@ flowchart LR
     subgraph API["공개 API (import 시 자동 다운로드 + 캐시)"]
         V["versions()"]
         F["find()"]
+        FO["find_offices()"]
         GT["get() ← 네트워크"]
         M["match_adm()"]
         C["compare()"]
@@ -39,7 +41,9 @@ flowchart LR
     MAPS -->|admdongkor.build_index| IX
     MAPS -->|scripts/measure_v3_step1+2| TL
     MAPS -->|scripts/measure_v3_step3| SP
+    KIK["행안부 KIKcd_H xlsx<br/><i>말소코드 포함</i>"] -->|preprocessing/scripts/build_offices.py| OF
     IX --> F
+    OF --> FO
     TL --> M
     TL --> C
     SP --> M
@@ -98,9 +102,9 @@ parquet/{emd,sgg,sido}_*.parquet   ×  62 버전  ×  3 레벨  =  186 파일
 
 ---
 
-## 2. 인덱스 4종 — 스키마와 역할
+## 2. 인덱스 5종 — 스키마와 역할
 
-### 2-1. `_index_v3.parquet` — 이름 검색 (find)
+### 2-1. `_index_v3.parquet` — 이름·코드 검색 (find)
 
 `_index.parquet` 이라는 옛 이름 별칭도 같은 내용으로 유지된다 (0.5.x 호환).
 canonical 이름은 `_index_v3.parquet`.
@@ -121,8 +125,14 @@ canonical 이름은 `_index_v3.parquet`.
 추가 컬럼: sggcd, sggnm, sidocd, sidonm, _fullpath (내부 검색용)
 
 용도: find("서울 종로") → _fullpath 에 str.contains → 후보 행들 반환
+      find("11110")     → code/code7/code8 에 prefix 매칭 → 후보 행들 반환
       한 레벨 당 약 3,500 (emd) / 250 (sgg) / 17 (sido) × 62 버전
 ```
+
+**코드 검색**: 숫자로만 이루어진 쿼리는 `_fullpath` 대신 `code`(행안부) /
+`code7` / `code8`(통계청) 세 컬럼에 prefix 매칭한다. 행정구역명 중 숫자만인 것은
+없어 이름 검색과 충돌하지 않는다. 별도 인덱스 파일이나 컬럼 추가는 없다 —
+이미 있는 코드 컬럼에 필터를 하나 더 얹는 것이라 데이터 크기는 그대로다.
 
 ### 2-2. `timeline_v3_{sido,sgg,emd}.parquet` — element ↔ global shape ↔ version
 
@@ -181,7 +191,41 @@ rep_version / rep_element 는 해당 shape 의 **대표 발현** (timeline 에 �
 어느 한 버전). 실제 intersection 계산은 rep 의 geometry 로 함.
 ```
 
-### 2-4. `_versions.py` — 버전 키 상수 (소스 코드)
+### 2-4. `_offices.parquet` — 출장소 (지도가 없는 코드)
+
+다른 인덱스와 **출처가 다르다**. 지도 parquet 에서 파생되는 게 아니라 행안부
+행정동 코드 마스터(`KIKcd_H ...(말소코드포함).xlsx`) 에서 직접 추출한다.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ _offices.parquet                              392 행 / 22 KB │
+├─────────────────────────────────────────────────────────────┤
+│ code       | name         | sggnm | sidonm  | level | ...   │
+├─────────────────────────────────────────────────────────────┤
+│ 2811400000 | 중구영종출장소 | <NA>  | 인천광역시 | sgg   │       │
+│ 2920083000 | 임곡출장소     | 광산구 | 광주광역시 | emd   │       │
+└─────────────────────────────────────────────────────────────┘
+
+추가 컬럼: sggcd, sidocd, created, abolished, _fullpath
+```
+
+**왜 `_index_v3` 에 합치지 않는가**: 출장소는 경계 지도(geojson/shp) 에 존재하지
+않는다. `_index_v3` 는 지도 parquet 에서 생성되고 모든 행이 `version_key` 를
+가진다는 전제 위에 서 있다. 지오메트리가 없는 행을 섞으면 `get()` 으로 못 여는
+행이 검색 결과에 나오고, `match_adm` / `compare` 의 element 집합도 오염된다.
+그래서 별도 파일 + 별도 API(`find_offices`) 로 분리했다.
+
+`version_key` 대신 `created` / `abolished` (YYYYMMDD) 로 유효 기간을 표현한다.
+2026-07 기준 현존 75 / 말소 317. `level` 은 코드 뒤 5자리가 `00000` 이면 `sgg`.
+
+> **원본 함정**: xlsx 의 3개 행(`4110500000`, `4210500000`, `5110500000`) 은
+> 시도명 칸에 출장소명이 들어가 있다 (컬럼 밀림). `build_offices.py` 가 코드
+> prefix 로 시도명을 복원한다 → 경기도 북부출장소 / 강원(특별자치)도 동해출장소.
+
+> **하위 호환**: 데이터 버전 `2026.08.02` 부터 추가. 그 이전 캐시에는 파일이
+> 없으므로 로더가 예외 대신 빈 결과를 반환한다 (py/js 양쪽).
+
+### 2-5. `_versions.py` — 버전 키 상수 (소스 코드)
 
 ```python
 # lib/src/admdongkor/_versions.py — parquet/emd_*.parquet 스캔 자동 재생성
@@ -365,6 +409,7 @@ GitHub repo:
     ├─ CHANGELOG.md                   ← 사람이 읽는 이력
     ├─ _index.parquet                 ← 옛 이름 (호환, 동일 내용 유지)
     ├─ _index_v3.parquet              ← canonical, 라이브러리가 참조  (1.8 MB)
+    ├─ _offices.parquet               ← 출장소 (지도 없음)            (  22 KB)
     ├─ timeline_v3_sido.parquet       (  10 KB)
     ├─ timeline_v3_sgg.parquet        ( 101 KB)
     ├─ timeline_v3_emd.parquet        (1.5 MB)
@@ -457,8 +502,10 @@ GitHub repo:
 | 경로                                                       | 역할                                                     |
 | ---------------------------------------------------------- | -------------------------------------------------------- |
 | `parquet/emd_*.parquet`, `sgg_*.parquet`, `sido_*.parquet` | 지도 (GitHub raw 로 서빙, `get()` 이 다운로드)           |
-| `dist/data/_index_v3.parquet`                              | 이름 검색 (find 용, canonical)                           |
+| `dist/data/_index_v3.parquet`                              | 이름·코드 검색 (find 용, canonical)                      |
 | `dist/data/_index.parquet`                                 | 위와 동일 내용의 별칭 (0.5.x 호환)                       |
+| `dist/data/_offices.parquet`                               | 출장소 (find_offices 용, 지도 없음)                      |
+| `preprocessing/scripts/build_offices.py`                   | 출장소 추출 (행안부 KIKcd_H xlsx → _offices.parquet)     |
 | `dist/data/timeline_v3_*.parquet`                          | element ↔ shape ↔ version                                |
 | `dist/data/shape_pairs_v3_*.parquet`                       | shape 쌍 weight                                          |
 | `dist/data/manifest.json`                                  | data_version + 파일별 sha256 + 수정 이력                 |
