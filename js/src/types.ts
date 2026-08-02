@@ -47,6 +47,11 @@ export interface AdmFeature<P = AdmProperties> {
 
 export interface AdmFeatureCollection<P = AdmProperties> {
   type: "FeatureCollection";
-  /** 저장 CRS 는 EPSG:4326. Leaflet/MapLibre 에서 바로 사용 가능. */
+  /**
+   * 이 데이터의 좌표계.
+   * - `"EPSG:4326"` — `detail: false` (light). Leaflet/MapLibre 에 바로 사용 가능.
+   * - `"EPSG:5179"` — `detail: true` (원본). UTM-K 미터 좌표라 재투영이 필요하다.
+   */
+  crs?: "EPSG:4326" | "EPSG:5179";
   features: AdmFeature<P>[];
 }

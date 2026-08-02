@@ -8,6 +8,7 @@ import { LevelToggle } from "@/components/controls/level-toggle";
 import { DetailToggle } from "@/components/controls/detail-toggle";
 import { BasemapToggle } from "@/components/controls/basemap-toggle";
 import { LabelToggle } from "@/components/controls/label-toggle";
+import { DownloadPanel } from "@/components/controls/download-panel";
 
 const WIDTH_DESKTOP = 320;
 const WIDTH_MOBILE = Math.round(WIDTH_DESKTOP * 0.6);
@@ -46,6 +47,7 @@ export function SidebarPanel() {
           <DetailToggle />
           <BasemapToggle />
           <LabelToggle />
+          <DownloadPanel />
         </div>
 
         <div className="px-4 py-3 border-t border-border text-[11px] text-muted-foreground space-y-1">

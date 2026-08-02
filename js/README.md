@@ -2,7 +2,7 @@
 
 대한민국 행정동 경계 — 1975 년부터 현재까지 **60 개 이상 시점**의 읍면동(emd) / 시군구(sgg) / 시도(sido) 경계를 조회 · 검색 · 비교하는 npm 라이브러리.
 
-파이썬 [`admdongkor`](https://pypi.org/project/admdongkor/) 패키지와 **같은 parquet 파일**을 공유한다. 지도 데이터는 GeoJSON 으로 바로 변환해 돌려주고 (CRS: **EPSG:4326 WGS84**), Leaflet / MapLibre / deck.gl / OpenLayers 에 그대로 투입 가능.
+파이썬 [`admdongkor`](https://pypi.org/project/admdongkor/) 패키지와 **같은 parquet 파일**을 공유한다. 지도 데이터는 GeoJSON 으로 바로 변환해 돌려주고 (light 기준 CRS: **EPSG:4326 WGS84**), Leaflet / MapLibre / deck.gl / OpenLayers 에 그대로 투입 가능.
 
 ## 설치
 
@@ -108,7 +108,25 @@ versions(1999); // [] — 해당 연도 데이터 없음
 | `emd`  | `emd7, emd8, emdcd, emdnm, sggcd, sggnm, sidocd, sidonm, area` |
 
 - `area` 는 m² (EPSG:5179 기준 계산값)
-- geometry 는 `Polygon` 또는 `MultiPolygon`, CRS 는 EPSG:4326
+- geometry 는 `Polygon` 또는 `MultiPolygon`
+
+> #### ⚠️ `detail` 에 따라 좌표계가 다르다
+>
+> | 옵션 | 저장 좌표계 | 비고 |
+> | --- | --- | --- |
+> | `detail: false` (기본, light) | **EPSG:4326** 경위도 | 웹 지도에 그대로 투입 가능 |
+> | `detail: true` (원본) | **EPSG:5179** UTM-K 미터 | 지도에 쓰려면 재투영 필요 |
+>
+> 반환값의 `crs` 필드로 판별할 수 있다:
+>
+> ```ts
+> const fc = await adk.get("20250401", "sido", { detail: true });
+> fc.crs; // "EPSG:5179"
+> ```
+>
+> 파이썬 `adk.get()` 은 geopandas 로 CRS 를 통일하지만, JS 는 재투영 의존성을
+> 두지 않으므로 저장된 좌표를 그대로 돌려준다. 원본을 웹 지도에 쓰려면
+> proj4js 등으로 직접 변환할 것.
 
 > #### ⚠️ 1975 / 1980 / 1985 시점의 코드 체계 주의
 >
@@ -147,7 +165,9 @@ const buf = await adk.getParquet("20260401", "emd");
 worker.postMessage(buf, [buf]); // zero-copy transfer
 ```
 
-데이터 포맷: geo-parquet spec, geometry WKB, EPSG:4326, snappy 압축.
+데이터 포맷: geo-parquet spec, geometry WKB, snappy 압축.
+좌표계는 `get()` 과 동일하게 **light = EPSG:4326 / 원본(`detail: true`) = EPSG:5179**.
+지오메트리 컬럼명도 다르다 — light 는 `geometry`, 원본은 `geom`.
 
 ---
 
