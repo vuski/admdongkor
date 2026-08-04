@@ -28,3 +28,8 @@ web/.next/
 web/out/
 *.tsbuildinfo
 .gstack/
+
+# 로컬 환경변수 (GA 측정 ID 등). CI 는 secret 으로 주입한다.
+.env
+.env.*
+!.env.example

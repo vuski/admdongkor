@@ -55,6 +55,11 @@ jobs:
 
       - name: Build web (Next.js static export)
         working-directory: web
+        # GA4 측정 ID 는 소스에 두지 않고 여기서 주입한다. secret 이 없으면
+        # 빈 값이 되고, layout.tsx 가 GA 스크립트를 렌더하지 않는다
+        # (fork 한 저장소에서 원저자 GA 로 데이터가 가지 않도록).
+        env:
+          NEXT_PUBLIC_GA_ID: ${{ secrets.NEXT_PUBLIC_GA_ID }}
         run: npm run build
 
       - name: Setup Pages

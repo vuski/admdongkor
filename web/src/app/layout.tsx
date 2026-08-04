@@ -3,6 +3,16 @@ import Script from "next/script";
 import "./globals.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 
+/**
+ * GA4 측정 ID. 소스에 두지 않고 빌드 시 주입한다 (CI 의 secret).
+ *
+ * 값이 없으면 GA 스크립트를 아예 렌더하지 않는다 — 이 repo 를 fork 하거나
+ * 로컬에서 돌리는 사람이 원저자의 GA 속성으로 데이터를 보내지 않도록.
+ * 정적 export 라 빌드 타임에 인라인되므로 배포된 HTML 에는 값이 남는다
+ * (측정 ID 는 원래 브라우저에 공개되는 값이라 정상).
+ */
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
+
 const SITE_URL = "https://admdongkor.vw-lab.com";
 const OG_IMAGE = `${SITE_URL}/admdongkor.png`;
 const TITLE = "admdongkor — 대한민국 행정동 경계 지도 (1975–2026)";
@@ -105,18 +115,22 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning>
         {children}
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-DQGV42KK1P"
-          strategy="afterInteractive"
-        />
-        <Script id="gtag-init" strategy="afterInteractive">
-          {`
+        {GA_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="gtag-init" strategy="afterInteractive">
+              {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', 'G-DQGV42KK1P');
+            gtag('config', '${GA_ID}');
           `}
-        </Script>
+            </Script>
+          </>
+        )}
       </body>
     </html>
   );
