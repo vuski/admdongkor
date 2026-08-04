@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAppStore } from "@/stores/app-store";
+import { GA_EVENT, track } from "@/lib/analytics";
 
 function formatKey(key: string): string {
   return `${key.slice(0, 4)}-${key.slice(4, 6)}-${key.slice(6, 8)}`;
@@ -23,7 +24,16 @@ export function VersionSlider() {
         color="var(--side-a)"
         committed={versionKey}
         list={list}
-        onCommit={(v) => setVersionKey(v)}
+        onCommit={(v) => {
+          setVersionKey(v);
+          // onCommit 은 드래그를 놓았을 때만 불린다 — 드래그 중 매 틱마다
+          // 이벤트가 쏟아지지 않는다.
+          track(GA_EVENT.versionChange, {
+            version_key: v,
+            slider: compareMode ? "a" : "single",
+            compare_mode: compareMode,
+          });
+        }}
       />
       {compareMode && (
         <SliderRow
@@ -31,7 +41,14 @@ export function VersionSlider() {
           color="var(--side-b)"
           committed={versionKeyB}
           list={list}
-          onCommit={(v) => setVersionKeyB(v)}
+          onCommit={(v) => {
+            setVersionKeyB(v);
+            track(GA_EVENT.versionChange, {
+              version_key: v,
+              slider: "b",
+              compare_mode: true,
+            });
+          }}
         />
       )}
     </div>

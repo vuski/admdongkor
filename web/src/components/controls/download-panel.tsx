@@ -19,6 +19,7 @@ import {
   type DownloadProgress,
 } from "@/lib/download";
 import { CRS_DEFS, CRS_GROUPS } from "@/lib/crs";
+import { GA_EVENT, track } from "@/lib/analytics";
 
 const FORMATS: DownloadFormat[] = ["parquet", "geojson", "gpkg"];
 
@@ -73,6 +74,25 @@ export function DownloadPanel() {
     const controller = new AbortController();
     abortRef.current = controller;
     setProgress({ ratio: 0, message: "준비 중…" });
+
+    // 어떤 조합으로 받는지 기록한다. 파일 크기가 아니라 **선택 조합**이
+    // 궁금한 것이므로 포맷·해상도·좌표계·레벨을 모두 싣는다.
+    const opts = {
+      format,
+      resolution: detail ? "detail" : "light",
+      // 커스텀 proj4 는 값 자체가 길고 개인 설정에 가까우므로 문자열 대신
+      // "custom" 으로만 남긴다.
+      crs: crs === CUSTOM_CRS ? "custom" : crs,
+      levels: [...levels].sort().join("+"),
+      level_count: levels.length,
+      version_key: selectedVersion,
+      // 지도에서 보던 시점 그대로인지, 따로 골랐는지.
+      version_source: picked === null ? "map" : "manual",
+      estimate_mb: Math.round(estimate * 10) / 10,
+    };
+    track(GA_EVENT.downloadStart, opts);
+
+    const t0 = Date.now();
     try {
       const { blob, filename } = await buildDownload({
         versionKey: selectedVersion,
@@ -86,8 +106,26 @@ export function DownloadPanel() {
       });
       saveBlob(blob, filename);
       setProgress(null);
+      track(GA_EVENT.downloadResult, {
+        ...opts,
+        outcome: "success",
+        duration_ms: Date.now() - t0,
+        // 실제 결과 용량 (추정치와 비교해 안내 문구를 다듬는 데 쓴다).
+        size_mb: Math.round((blob.size / 1048576) * 10) / 10,
+      });
     } catch (e) {
-      if ((e as Error)?.name === "AbortError") {
+      const aborted = (e as Error)?.name === "AbortError";
+      track(GA_EVENT.downloadResult, {
+        ...opts,
+        outcome: aborted ? "cancel" : "error",
+        duration_ms: Date.now() - t0,
+        error: aborted
+          ? undefined
+          : e instanceof Error
+            ? e.message
+            : String(e),
+      });
+      if (aborted) {
         setProgress(null);
         return;
       }

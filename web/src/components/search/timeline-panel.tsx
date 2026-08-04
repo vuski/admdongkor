@@ -10,6 +10,7 @@ import {
   yearOf,
 } from "@/lib/timeline-years";
 import { useAppStore } from "@/stores/app-store";
+import { GA_EVENT, track } from "@/lib/analytics";
 import { useTimelineStore } from "@/stores/timeline-store";
 import { cn } from "@/lib/cn";
 
@@ -168,6 +169,13 @@ export function TimelinePanel() {
     ) {
       setSelectedVersions([...selectedVersions, baseVersion]);
     }
+    track(GA_EVENT.timelineTrack, {
+      level,
+      base_version: baseVersion,
+      region_count: selections.length,
+      version_count: selectedVersions.length,
+    });
+
     setQueryStore({
       baseVersion,
       level,

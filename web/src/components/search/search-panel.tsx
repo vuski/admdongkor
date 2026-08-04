@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Loader2, AlertCircle, MapPinOff } from "lucide-react";
 import type { FindRow, Level, OfficeRow } from "admdongkor";
 import { useFind } from "@/hooks/use-find";
 import { useFindOffices } from "@/hooks/use-find-offices";
+import { GA_EVENT, track } from "@/lib/analytics";
 import { useAppStore } from "@/stores/app-store";
 import { cn } from "@/lib/cn";
 
@@ -19,6 +20,25 @@ export function SearchPanel() {
   const { rows, loading, error } = useFind(query);
   const { rows: offices } = useFindOffices(query);
   const codeMode = isCodeQuery(query);
+
+  // 검색어 자체가 아니라 **검색 행위**를 기록한다. useFind 의 디바운스가 끝나고
+  // 결과가 확정된 뒤에만 한 번 보내므로 타이핑 중 이벤트가 쏟아지지 않는다.
+  const lastLogged = useRef<string | null>(null);
+  useEffect(() => {
+    const q = query.trim();
+    if (!q || loading) return;
+    if (lastLogged.current === q) return;
+    lastLogged.current = q;
+    track(GA_EVENT.searchQuery, {
+      mode: codeMode ? "code" : "name",
+      query_length: q.length,
+      // 코드 검색이면 자릿수가 의미 있다 (2/5/7/8/10).
+      code_digits: codeMode ? q.length : undefined,
+      result_count: rows.length,
+      office_count: offices.length,
+      has_result: rows.length + offices.length > 0,
+    });
+  }, [query, loading, codeMode, rows.length, offices.length]);
 
   return (
     <div className="space-y-3">
@@ -254,6 +274,14 @@ function ResultsList({
             codeMode={codeMode}
             query={query.trim()}
             onPick={(versionKey) => {
+              track(GA_EVENT.searchResultPick, {
+                level: g.level,
+                version_key: versionKey,
+                // 어느 시점을 골랐는지 (최초/최근) 도 쓸모가 있다.
+                pick: versionKey === g.versions[0] ? "first" : "last",
+                version_count: g.versions.length,
+                has_code: g.code != null,
+              });
               setVersionKey(versionKey);
               setLevel(g.level);
               const codeField =
