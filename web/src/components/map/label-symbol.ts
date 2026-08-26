@@ -16,6 +16,22 @@ const SIZE_BY_LEVEL: Record<Level, number> = { sido: 18, sgg: 15, emd: 12 };
 //   이름의 "Bold" 로 한글도 700 굵기로 렌더. (popuKrei 검증 패턴)
 const TEXT_FONT = ["Open Sans Bold"];
 
+// 독도 라벨은 **행정구역이 아니라 지명(섬)** 이므로 행정구역 라벨과 구분되게
+// 그린다. 같은 폰트로 쓰면 "경상북도" 옆의 "독도" 가 시도 레벨처럼 읽힌다.
+//   - italic: 자연지물을 이탤릭으로 쓰는 지도 관례. Positron 도 같은 규칙.
+//   - halo 없음: 행정구역 라벨의 흰 버퍼와 시각적으로 분리.
+// ⚠️ "Open Sans Italic" 은 Carto glyph 서버에 실재함을 확인했다(HTTP 200).
+//    없는 폰트를 쓰면 glyph 404 로 라벨이 통째로 사라진다.
+const PLACE_FONT = ["Open Sans Italic"];
+const PLACE_SIZE = 11;
+
+/** 독도 라벨. 행정구역 경계와 무관하게 항상 같은 자리에 찍는다.
+ *  동도·서도 사이 지점 (WGS84). */
+const DOKDO_LABEL = {
+  text: "독도",
+  position: [131.8664, 37.2429] as [number, number],
+};
+
 const LEVELS: Level[] = ["sido", "sgg", "emd"];
 
 /** deck.gl(경계선/diff) 레이어를 이 anchor "아래"에 삽입시키기 위한 빈 레이어 id.
@@ -49,6 +65,64 @@ function srcId(side: "A" | "B", lv: Level): string {
 /** side + level 별 symbol layer id. */
 function layerId(side: "A" | "B", lv: Level): string {
   return `adm-labels-${side}-${lv}-sym`;
+}
+
+/** 지명(독도) 라벨 source/layer id — 레벨과 무관하게 side 당 하나. */
+function placeSrcId(side: "A" | "B"): string {
+  return `adm-place-${side}`;
+}
+function placeLayerId(side: "A" | "B"): string {
+  return `adm-place-${side}-sym`;
+}
+
+/** 독도 라벨 레이어를 보장/제거. 행정구역 라벨과 독립적으로 동작한다. */
+function applyPlaceLabels(map: MapLibreMap, side: "A" | "B", show: boolean): void {
+  const lid = placeLayerId(side);
+  const sid = placeSrcId(side);
+
+  if (!show) {
+    if (map.getLayer(lid)) map.removeLayer(lid);
+    if (map.getSource(sid)) map.removeSource(sid);
+    return;
+  }
+
+  const data: GeoJSON.FeatureCollection<GeoJSON.Point> = {
+    type: "FeatureCollection",
+    features: [{
+      type: "Feature",
+      geometry: { type: "Point", coordinates: DOKDO_LABEL.position },
+      properties: { label: DOKDO_LABEL.text },
+    }],
+  };
+
+  const src = map.getSource(sid) as GeoJSONSource | undefined;
+  if (src) src.setData(data);
+  else map.addSource(sid, { type: "geojson", data });
+
+  if (!map.getLayer(lid)) {
+    map.addLayer({
+      id: lid,
+      type: "symbol",
+      source: sid,
+      layout: {
+        "text-field": ["get", "label"],
+        "text-size": PLACE_SIZE,
+        "text-font": PLACE_FONT,
+        // 주변에 겹칠 행정구역 라벨이 없는 먼바다라 항상 표시해도 안전하고,
+        // "항상 독도라고 표시" 가 요구사항이므로 충돌로 사라지지 않게 한다.
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        "text-anchor": "top",
+        "text-offset": [0, 0.5],
+      },
+      paint: {
+        // halo 없이 — 행정구역 라벨(흰 버퍼) 과 시각적으로 구분.
+        "text-color": "#333333",
+      },
+    });
+  } else {
+    map.moveLayer(lid);
+  }
 }
 
 /** LabelDatum[] → MapLibre symbol 용 GeoJSON Point FeatureCollection.
@@ -160,4 +234,8 @@ export function applyLabels(
       if (map.getSource(srcId(side, lv))) map.removeSource(srcId(side, lv));
     }
   }
+
+  // 독도 라벨 — 레벨(시도/시군구/읍면동) 과 무관하게 지도가 켜져 있으면 항상.
+  // 행정구역 라벨 루프 **뒤**에 둬야 스택 최상단에 온다.
+  applyPlaceLabels(map, side, show);
 }
