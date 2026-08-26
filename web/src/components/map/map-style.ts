@@ -30,14 +30,25 @@ export function setBasemapVisible(map: MapLibreMap, visible: boolean): void {
 }
 
 /** 스타일 로드 후 symbol 레이어의 text-field 를 한국어로 전환.
- *  단 우리가 얹은 행정구역 라벨(`adm-labels-`)은 자체 text-field(get label)를 쓰므로
- *  건드리면 안 된다 — 덮어쓰면 name:ko 가 없어 라벨이 통째로 빈 텍스트로 사라진다. */
+ *
+ *  ⚠️ **우리가 얹는 라벨 레이어는 반드시 제외 목록에 넣어야 한다.**
+ *  이 함수는 스타일의 모든 symbol 레이어를 돌며 text-field 를
+ *  `coalesce(name:ko, name_ko, name)` 로 덮어쓴다. 우리 레이어의 property 는
+ *  `label` 이라 덮이면 빈 텍스트가 되어 **레이어는 살아있는데 글자만 사라진다**
+ *  (getLayer 는 true, queryRenderedFeatures 는 0 — 원인 찾기 어려움).
+ *
+ *  새 라벨 레이어를 추가하면 여기 prefix 를 등록할 것.
+ *    adm-labels-  행정구역 라벨
+ *    adm-place-   지명 라벨 (독도 등)
+ *  → .readme/admdongkor/20260826_dokdo_label.md */
 export function applyKoreanLabels(map: MapLibreMap): void {
   const style = map.getStyle();
   if (!style?.layers) return;
   for (const layer of style.layers) {
     if (layer.type !== "symbol") continue;
+    // 우리 라벨 레이어는 제외 (위 주석 참조).
     if (layer.id.startsWith("adm-labels-")) continue;
+    if (layer.id.startsWith("adm-place-")) continue;
     const layout = (layer as { layout?: Record<string, unknown> }).layout;
     if (!layout || !layout["text-field"]) continue;
     try {

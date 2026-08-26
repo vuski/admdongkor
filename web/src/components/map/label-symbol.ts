@@ -18,12 +18,14 @@ const TEXT_FONT = ["Open Sans Bold"];
 
 // 독도 라벨은 **행정구역이 아니라 지명(섬)** 이므로 행정구역 라벨과 구분되게
 // 그린다. 같은 폰트로 쓰면 "경상북도" 옆의 "독도" 가 시도 레벨처럼 읽힌다.
-//   - italic: 자연지물을 이탤릭으로 쓰는 지도 관례. Positron 도 같은 규칙.
-//   - halo 없음: 행정구역 라벨의 흰 버퍼와 시각적으로 분리.
-// ⚠️ "Open Sans Italic" 은 Carto glyph 서버에 실재함을 확인했다(HTTP 200).
-//    없는 폰트를 쓰면 glyph 404 로 라벨이 통째로 사라진다.
+//
+// ⚠️ 한글은 glyph PBF 가 아니라 `localIdeographFontFamily`(브라우저 canvas) 로
+//    렌더되므로 **text-font 의 italic/bold 는 한글에 적용되지 않는다.**
+//    따라서 구분은 폰트가 아니라 **크기·색·halo 없음**으로 준다.
+//    (text-font 자체는 라틴 fallback 용으로 실재하는 값이어야 함 — 404 나면
+//     라벨이 통째로 사라진다. "Open Sans Italic" 은 HTTP 200 확인.)
 const PLACE_FONT = ["Open Sans Italic"];
-const PLACE_SIZE = 11;
+const PLACE_SIZE = 12;
 
 /** 독도 라벨. 행정구역 경계와 무관하게 항상 같은 자리에 찍는다.
  *  동도·서도 사이 지점 (WGS84). */
@@ -117,12 +119,15 @@ function applyPlaceLabels(map: MapLibreMap, side: "A" | "B", show: boolean): voi
       },
       paint: {
         // halo 없이 — 행정구역 라벨(흰 버퍼) 과 시각적으로 구분.
-        "text-color": "#333333",
+        // 색도 행정구역(#111 진한 검정) 보다 흐리게 해서 위계를 낮춘다.
+        "text-color": "#4a4a4a",
       },
     });
-  } else {
-    map.moveLayer(lid);
   }
+  // 생성 직후에도 반드시 최상단으로. deck.gl 은 beforeId=DECK_ANCHOR_ID 로
+  // anchor "아래"에 삽입되지만, 그건 anchor 기준일 뿐이라 이 레이어가 anchor
+  // 아래에 남아 있으면 deck 의 fill 에 덮인다. 멱등이므로 매번 호출해도 안전.
+  map.moveLayer(lid);
 }
 
 /** LabelDatum[] → MapLibre symbol 용 GeoJSON Point FeatureCollection.
@@ -180,6 +185,10 @@ export function applyLabels(
   }
   const prev = sideMap[side];
   const anchorAlive = !!map.getLayer(DECK_ANCHOR_ID);
+  // 독도 라벨은 dirty-check **앞**에서 처리한다. 뒤에 두면 show/level/labelData 가
+  // 그대로인 idle 재호출에서 early-return 에 걸려 영영 생성되지 않는다.
+  // (style.load 로 레이어가 통째로 날아간 뒤 복구도 이 경로로 이뤄진다.)
+  applyPlaceLabels(map, side, show);
   if (
     prev &&
     anchorAlive &&
@@ -235,7 +244,6 @@ export function applyLabels(
     }
   }
 
-  // 독도 라벨 — 레벨(시도/시군구/읍면동) 과 무관하게 지도가 켜져 있으면 항상.
-  // 행정구역 라벨 루프 **뒤**에 둬야 스택 최상단에 온다.
-  applyPlaceLabels(map, side, show);
+  // 행정구역 라벨을 새로 얹었으므로 독도 라벨을 다시 최상단으로.
+  if (map.getLayer(placeLayerId(side))) map.moveLayer(placeLayerId(side));
 }
