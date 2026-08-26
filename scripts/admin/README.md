@@ -128,7 +128,8 @@ git push
 |---|---|
 | `rebuild_all.py` | 메인 래퍼. `_versions.py` + 인덱스 재빌드. |
 | `publish_data.py` | `lib/src/admdongkor/data/*.parquet` → `dist/data/` + `manifest.json` / `CHANGELOG.md` |
-| `build_light_parquet.py` | parquet → simplified(`*_light.parquet`) × mapshaper 18.7% |
+| `build_light_parquet.py` | parquet → simplified(`*_light.parquet`) × mapshaper 18.7%. 독도 등 미세 섬은 단순화 후 원본 part 로 복원 |
+| `patch_dokdo_light.py` | 1회성 보수 — 기존 `*_light.parquet` 에 독도 주입 (재실행해도 안전) |
 | `build_timeline.py` | web 프론트의 `web/public/timeline/v/<key>/geom.bin` + `meta.parquet` 생성 |
 
 상위 `scripts/` 의 `measure_v3_*.py` 들은 phase 3 에서 호출됨 (관리자가 직접 돌릴 일 없음).
