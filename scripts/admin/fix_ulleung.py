@@ -207,7 +207,11 @@ def fix_emd(version: str, donor: list, dry_run: bool) -> dict:
             d.at[i, gc] = MultiPolygon(kept + donor)
         added = len(donor)
 
+    # 지오메트리를 바꿨으면 area 컬럼도 다시 계산해야 한다.
+    # 인덱스(_common.py) 가 이 컬럼을 그대로 복사하므로, 빼먹으면
+    # dist/data 인덱스에 옛 면적이 그대로 실린다.
     if not dry_run:
+        d["area"] = d[gc].area
         d.to_parquet(path, compression="snappy")
     return {"moved": moved, "added": added, "removed": removed,
             "dx": dx, "dy": dy, "note": note}
@@ -279,6 +283,7 @@ def fix_sgg_sido(version: str, donor: list, dry_run: bool) -> dict:
             added = len(donor)
 
         if not dry_run:
+            d["area"] = d[gc].area
             d.to_parquet(path, compression="snappy")
         out[level] = (moved, removed, added)
     return out

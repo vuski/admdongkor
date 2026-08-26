@@ -129,6 +129,7 @@ git push
 | `rebuild_all.py` | 메인 래퍼. `_versions.py` + 인덱스 재빌드. |
 | `publish_data.py` | `lib/src/admdongkor/data/*.parquet` → `dist/data/` + `manifest.json` / `CHANGELOG.md` |
 | `build_light_parquet.py` | parquet → simplified(`*_light.parquet`) × mapshaper 18.7%. 독도 등 미세 섬은 단순화 후 원본 part 로 복원 |
+| `fix_ulleung_geojson.py` | **원본 geojson** 의 울릉도 보정 + 독도 정리. 파일당 3줄만 수정, 멱등 |
 | `fix_ulleung.py` | 1회성 보수 — 울릉도 위치 보정(그룹별 평행이동) + 독도 정리. **원본** parquet 대상, 재실행 안전 |
 | `patch_dokdo_light.py` | (사용 완료) light 에 독도 주입. 현재는 `build_light_parquet.py` 가 자동 처리 |
 | `build_timeline.py` | web 프론트의 `web/public/timeline/v/<key>/geom.bin` + `meta.parquet` 생성 |

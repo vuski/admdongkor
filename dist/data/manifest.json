@@ -1,8 +1,8 @@
 {
-  "data_version": "2026.08.02",
+  "data_version": "2026.08.26",
   "schema_version": "v3",
   "min_lib_version": "0.6.0",
-  "created_at": "2026-08-02T12:28:20Z",
+  "created_at": "2026-08-26T12:45:54Z",
   "versions": [
     "19751231",
     "19801231",
@@ -70,6 +70,10 @@
   ],
   "history": [
     {
+      "version": "2026.08.26",
+      "changes": "울릉도 위치 보정(그룹별 평행이동) + 독도 전 시점 추가"
+    },
+    {
       "version": "2026.08.02",
       "changes": "출장소 코드표 추가"
     },
@@ -97,27 +101,27 @@
     },
     "timeline_v3_sido.parquet": {
       "size": 10680,
-      "sha256": "20931af613f66185c12bcb1d491a8cb82d87dd813e06041852933d4582a66599"
+      "sha256": "f3aecf23c5484257fdc450d483c657243eee2113253058b54ea9d069a904b548"
     },
     "timeline_v3_sgg.parquet": {
-      "size": 105056,
-      "sha256": "d339b01f6761c381575a4f71c514941fe6a3e89153d793f056853f91b5e6bf1f"
+      "size": 105038,
+      "sha256": "a93205c7913b80b95a9cdcbddc2026e699e95e2e85df5f9cd011e7734079fc2f"
     },
     "timeline_v3_emd.parquet": {
-      "size": 1561797,
-      "sha256": "f7979e6b47ad54a0bb6012fb1868e52327197943bee2269ce3c1fd927dc18206"
+      "size": 1561696,
+      "sha256": "ea72b9d9c9a0c87281679817af2ca550370ab4ac93a776a59ab3a6eddb567a70"
     },
     "shape_pairs_v3_sido.parquet": {
       "size": 14326,
-      "sha256": "50e3dc4bc97f6a819eb1640d9ac01991b68bd062f0912822c0b02fb2b4b53523"
+      "sha256": "2edc407042bab4fbc3d30646e21e23e402dccb2ec031d1ea68d9d39bc5155d19"
     },
     "shape_pairs_v3_sgg.parquet": {
-      "size": 93466,
-      "sha256": "3a5811f217aa03ff3e87f4f3e5d138e4fe7857478ddcc3fa315fb556736b9426"
+      "size": 93182,
+      "sha256": "a2338ee3ce3c91f97c60b1f061c75acff4d552559c522339b2a901e92a3a3da0"
     },
     "shape_pairs_v3_emd.parquet": {
-      "size": 2167472,
-      "sha256": "8af06696ecd124cc94a998c89f98e2c556051bbe61e37cdb75ace81bc43be4ac"
+      "size": 2164834,
+      "sha256": "74a1c45e457b9d077e4432e2a46be277e8765fdcfe3948ccaaed02a6e38167d0"
     }
   }
 }
