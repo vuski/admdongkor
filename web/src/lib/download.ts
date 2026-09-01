@@ -27,6 +27,13 @@ import {
 
 export type DownloadFormat = "parquet" | "geojson" | "gpkg";
 
+/**
+ * 섬 당겨오기를 수행하는 좌표계.
+ * 평행이동은 좌표계마다 결과가 달라 하나로 고정해야 한다. 5179(UTM-K) 가
+ * 한국 영역에서 면적 왜곡이 가장 작다 (island-move.ts 주석의 실측 비교).
+ */
+const MOVE_CRS = "EPSG:5179";
+
 export const FORMAT_LABEL: Record<DownloadFormat, string> = {
   parquet: "Parquet",
   geojson: "GeoJSON",
@@ -160,22 +167,26 @@ async function buildOne(
   // get() 이 알려주는 값을 그대로 믿되, 없으면 detail 로 추정한다.
   const sourceCrs = fc.crs ?? (detail ? "EPSG:5179" : SOURCE_CRS);
 
-  // 섬 당겨오기는 **EPSG:4326 기준 이동량**이라 좌표 변환보다 먼저,
-  // 그리고 4326 인 상태에서 해야 한다. 원본(5179) 은 4326 으로 돌린 뒤 적용.
+  // 섬 당겨오기는 **EPSG:5179 기준 이동량**이라 5179 인 상태에서 해야 한다.
+  // 평행이동 결과는 좌표계마다 다르고, 투영이 비선형이라 한 좌표계에서 잰
+  // (dx,dy) 를 다른 좌표계에 그대로 쓸 수 없다. 세 후보 실측 비교 결과
+  // 5179 가 면적 왜곡이 가장 작아 채택했다 (island-move.ts 주석 참조).
+  //
+  // 비용: 원본(detail)은 이미 5179 라 변환이 없고, light(4326) 만 왕복한다.
   let connectors: FeatureCollection | null = null;
   if (pullIslands) {
-    const to4326 = await makeConverter(SOURCE_CRS, undefined, sourceCrs);
-    if (to4326) transformFeatureCollection(fc, to4326);
+    const to5179 = await makeConverter(MOVE_CRS, undefined, sourceCrs);
+    if (to5179) transformFeatureCollection(fc, to5179);
     pullInIslands(fc);
     connectors = {
       type: "FeatureCollection",
       features: connectorFeatures(),
     };
-    // 이제 둘 다 4326 이다. 목표 좌표계 변환은 4326 에서 출발.
-    const conv4326 = await makeConverter(crs, customProj4, SOURCE_CRS);
-    if (conv4326) {
-      transformFeatureCollection(fc, conv4326);
-      transformFeatureCollection(connectors, conv4326);
+    // 이제 둘 다 5179 다. 목표 좌표계 변환은 5179 에서 출발.
+    const conv = await makeConverter(crs, customProj4, MOVE_CRS);
+    if (conv) {
+      transformFeatureCollection(fc, conv);
+      transformFeatureCollection(connectors, conv);
     }
     // GeoJSON 은 레이어 개념이 없으므로 한 컬렉션에 합친다.
     // (properties.kind === "island_connector" 로 구분 가능)

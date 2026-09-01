@@ -355,13 +355,22 @@ export function DownloadPanel() {
           </p>
         )}
         {pullIslands && !islandBlocked && (
-          <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
-            지시선은 {format === "gpkg"
-              ? "`island_connector` 레이어로 따로"
-              : "`kind: island_connector` 속성으로 같은 파일에"}{" "}
-            들어갑니다. 일점쇄선은 스타일이라 데이터에는 담기지 않으니 QGIS 등에서
-            지정하세요.
-          </p>
+          <>
+            <p className="text-[10px] text-amber-700 dark:text-amber-500 mt-1 leading-relaxed">
+              ⚠ 섬을 옮기면 그 지점의 면적·거리·형상이 실제와 달라집니다
+              (EPSG:5179 기준 이동, 면적 변화 최대 약 0.3%).
+              <strong className="font-medium"> 지도 표현용</strong>이며 면적·거리
+              계산에는 원본을 쓰세요.
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+              지시선은{" "}
+              {format === "gpkg"
+                ? "`island_connector` 레이어로 따로"
+                : "`kind: island_connector` 속성으로 같은 파일에"}{" "}
+              들어갑니다. 일점쇄선은 스타일이라 데이터에 담기지 않으니 QGIS 등에서
+              지정하세요.
+            </p>
+          </>
         )}
       </div>
 
