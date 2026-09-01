@@ -28,6 +28,15 @@ import {
 export type DownloadFormat = "parquet" | "geojson" | "gpkg";
 
 /**
+ * 해상도 3단계.
+ *   detail  원본
+ *   light   기본 단순화 — 읍면동 18.7% 후 dissolve (배포된 parquet)
+ *   super   많이 단순화 — 시군구 2.7%, 시도는 그걸 dissolve. 브라우저에서 계산.
+ *           읍면동은 만들 수 없다 (시군구부터 다시 단순화하므로).
+ */
+export type Resolution = "detail" | "light" | "super";
+
+/**
  * 섬 당겨오기를 수행하는 좌표계.
  * 평행이동은 좌표계마다 결과가 달라 하나로 고정해야 한다. 5179(UTM-K) 가
  * 한국 영역에서 면적 왜곡이 가장 작다 (island-move.ts 주석의 실측 비교).
@@ -63,6 +72,8 @@ export interface DownloadRequest {
   format: DownloadFormat;
   /** true = 원본 해상도, false = 단순화(light). */
   detail: boolean;
+  /** "많이 단순화" — 시군구 2.7% 재단순화. 읍면동 미선택 시에만 가능. */
+  superSimplify?: boolean;
   /** 대상 좌표계 키 (`EPSG:5179` 또는 CUSTOM_CRS). */
   crs: string;
   /** crs === CUSTOM_CRS 일 때 쓸 proj4 문자열. */
@@ -136,37 +147,46 @@ export function parquetBlocksIslandPull(
   return format === "parquet" && pullIslands;
 }
 
+/**
+ * "많이 단순화" 는 **시군구부터 다시 단순화**하므로 읍면동을 만들 수 없다.
+ * (기본 light 는 읍면동을 18.7% 로 줄인 뒤 dissolve 한 것이고, 여기서 더
+ *  줄이려면 읍면동 경계 자체를 버려야 한다.)
+ */
+export function superBlocksEmd(
+  superSimplify: boolean,
+  levels: Level[],
+): boolean {
+  return superSimplify && levels.includes("emd");
+}
+
+/** 많이 단순화는 지오메트리를 다시 써야 하므로 parquet 통과 경로를 못 쓴다. */
+export function parquetBlocksSuper(
+  format: DownloadFormat,
+  superSimplify: boolean,
+): boolean {
+  return format === "parquet" && superSimplify;
+}
+
 /** parquet 파일이 실제로 저장하고 있는 좌표계. */
 export function nativeParquetCrs(detail: boolean): string {
   return detail ? "EPSG:5179" : "EPSG:4326";
 }
 
-async function buildOne(
+/**
+ * FeatureCollection 을 목표 좌표계로 옮기고(필요 시 섬 당겨오기 포함)
+ * 선택한 포맷 바이트로 직렬화한다. buildOne 과 buildSuper 가 공유한다.
+ */
+async function serializeFc(
+  fc: FeatureCollection,
   level: Level,
   versionKey: string,
   format: DownloadFormat,
-  detail: boolean,
   crs: string,
   customProj4: string | undefined,
   pullIslands: boolean,
+  sourceCrs: string,
   signal?: AbortSignal,
 ): Promise<Uint8Array> {
-  if (format === "parquet" && !pullIslands) {
-    // 좌표 변환도 섬 이동도 없을 때만 도달한다. 바이트 그대로 통과.
-    const buf = await getParquet(versionKey, level, { detail, signal });
-    return new Uint8Array(buf);
-  }
-
-  const fc = (await get(versionKey, level, {
-    detail,
-    signal,
-  })) as unknown as FeatureCollection & { crs?: string };
-  throwIfAborted(signal);
-
-  // 출발 좌표계는 파일마다 다르다: light=4326, 원본=5179.
-  // get() 이 알려주는 값을 그대로 믿되, 없으면 detail 로 추정한다.
-  const sourceCrs = fc.crs ?? (detail ? "EPSG:5179" : SOURCE_CRS);
-
   // 섬 당겨오기는 **EPSG:5179 기준 이동량**이라 5179 인 상태에서 해야 한다.
   // 평행이동 결과는 좌표계마다 다르고, 투영이 비선형이라 한 좌표계에서 잰
   // (dx,dy) 를 다른 좌표계에 그대로 쓸 수 없다. 세 후보 실측 비교 결과
@@ -217,6 +237,90 @@ async function buildOne(
   });
 }
 
+
+async function buildOne(
+  level: Level,
+  versionKey: string,
+  format: DownloadFormat,
+  detail: boolean,
+  crs: string,
+  customProj4: string | undefined,
+  pullIslands: boolean,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  if (format === "parquet" && !pullIslands) {
+    // 좌표 변환도 섬 이동도 없을 때만 도달한다. 바이트 그대로 통과.
+    const buf = await getParquet(versionKey, level, { detail, signal });
+    return new Uint8Array(buf);
+  }
+
+  const fc = (await get(versionKey, level, {
+    detail,
+    signal,
+  })) as unknown as FeatureCollection & { crs?: string };
+  throwIfAborted(signal);
+
+  // 출발 좌표계는 파일마다 다르다: light=4326, 원본=5179.
+  // get() 이 알려주는 값을 그대로 믿되, 없으면 detail 로 추정한다.
+  const sourceCrs = fc.crs ?? (detail ? "EPSG:5179" : SOURCE_CRS);
+
+  return serializeFc(fc, level, versionKey, format, crs, customProj4,
+    pullIslands, sourceCrs, signal);
+}
+
+/**
+ * "많이 단순화" 경로.
+ *
+ * 시군구를 2.7% 로 한 번만 단순화하고, 시도가 필요하면 **그 결과를 dissolve**
+ * 한다. 시도를 따로 단순화하면 시군구와 경계가 어긋나 겹쳤을 때 틈이 생긴다.
+ *
+ * 반환: [level, 직렬화된 바이트] 목록.
+ */
+async function buildSuper(
+  levels: Level[],
+  versionKey: string,
+  format: DownloadFormat,
+  crs: string,
+  customProj4: string | undefined,
+  pullIslands: boolean,
+  onProgress: ((p: DownloadProgress) => void) | undefined,
+  signal?: AbortSignal,
+): Promise<[Level, Uint8Array][]> {
+  const { supersimplifySgg, dissolveToSido } = await import("./supersimplify");
+  throwIfAborted(signal);
+
+  // 항상 light 시군구에서 출발한다 (원본은 무겁고, 어차피 크게 줄일 것이라
+  // 출발점 해상도가 결과에 거의 영향을 주지 않는다).
+  const src = (await get(versionKey, "sgg", {
+    detail: false,
+    signal,
+  })) as unknown as FeatureCollection;
+  throwIfAborted(signal);
+
+  onProgress?.({ ratio: 0.2, message: "시군구 단순화 중…" });
+  const sgg = await supersimplifySgg(src);
+  throwIfAborted(signal);
+
+  const out: [Level, FeatureCollection][] = [];
+  if (levels.includes("sgg")) out.push(["sgg", sgg]);
+  if (levels.includes("sido")) {
+    onProgress?.({ ratio: 0.5, message: "시도 병합 중…" });
+    out.push(["sido", await dissolveToSido(sgg)]);
+  }
+  throwIfAborted(signal);
+
+  // 좌표 변환·섬 당겨오기는 buildOne 과 같은 순서로 (5179 에서 이동).
+  const res: [Level, Uint8Array][] = [];
+  for (const [lv, fc] of out) {
+    throwIfAborted(signal);
+    onProgress?.({ ratio: 0.7, message: `${lv} 내보내는 중…` });
+    res.push([lv, await serializeFc(fc, lv, versionKey, format, crs,
+      customProj4, pullIslands, SOURCE_CRS, signal)]);
+  }
+  return res;
+}
+
+
 function zipAsync(files: Record<string, Uint8Array>): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
     // parquet 은 이미 snappy 압축이라 재압축 이득이 거의 없다 → store.
@@ -238,8 +342,9 @@ function fileNameFor(
   detail: boolean,
   crs: string,
   pullIslands: boolean,
+  superSimplify: boolean,
 ): string {
-  const res = detail ? "" : "_light";
+  const res = superSimplify ? "_super" : detail ? "" : "_light";
   const proj = crs === SOURCE_CRS ? "" : `_${crsSuffix(crs)}`;
   // 원본과 헷갈리면 안 되므로 파일명에 명시한다.
   const isl = pullIslands ? "_pulled" : "";
@@ -254,6 +359,7 @@ export async function buildDownload({
   crs,
   customProj4,
   pullIslands = false,
+  superSimplify = false,
   onProgress,
   signal,
 }: DownloadRequest): Promise<{ blob: Blob; filename: string }> {
@@ -265,7 +371,20 @@ export async function buildDownload({
         "GeoJSON 또는 GeoPackage 를 선택하세요.",
     );
   }
-  if (parquetNeedsSourceCrs(format, crs, detail)) {
+  if (parquetBlocksSuper(format, superSimplify)) {
+    throw new Error(
+      "Parquet 은 '단순화(많이)' 와 함께 받을 수 없습니다 " +
+        "(브라우저에서 parquet 을 다시 쓸 수 없음). " +
+        "GeoJSON 또는 GeoPackage 를 선택하세요.",
+    );
+  }
+  if (superBlocksEmd(superSimplify, levels)) {
+    throw new Error(
+      "'단순화(많이)' 는 시군구부터 다시 단순화하므로 읍면동을 만들 수 없습니다. " +
+        "읍면동을 빼거나 '단순화(보통)' 을 선택하세요.",
+    );
+  }
+  if (!superSimplify && parquetNeedsSourceCrs(format, crs, detail)) {
     throw new Error(
       `Parquet 은 저장된 좌표계(${nativeParquetCrs(detail)})로만 받을 수 있습니다. ` +
         "다른 좌표계가 필요하면 GeoJSON 또는 GeoPackage 를 선택하세요.",
@@ -278,21 +397,42 @@ export async function buildDownload({
   const files: Record<string, Uint8Array> = {};
   const steps = levels.length + 1;
 
-  for (let i = 0; i < levels.length; i++) {
-    const level = levels[i]!;
-    throwIfAborted(signal);
-    onProgress?.({ ratio: i / steps, message: `${level} 처리 중…` });
-    files[fileNameFor(level, versionKey, format, detail, crs, pullIslands)] =
-      await buildOne(
-      level,
+  if (superSimplify) {
+    // 시군구를 한 번만 단순화하고, 시도는 **그 결과를 dissolve** 한다.
+    // 각자 단순화하면 두 레이어 경계가 어긋나 겹쳤을 때 틈이 생긴다.
+    onProgress?.({ ratio: 0, message: "시군구 단순화 중…" });
+    const built = await buildSuper(
+      levels,
       versionKey,
       format,
-      detail,
       crs,
       customProj4,
       pullIslands,
+      onProgress,
       signal,
     );
+    for (const [lv, bytes] of built) {
+      files[fileNameFor(lv, versionKey, format, false, crs, pullIslands, true)] =
+        bytes;
+    }
+  } else {
+    for (let i = 0; i < levels.length; i++) {
+      const level = levels[i]!;
+      throwIfAborted(signal);
+      onProgress?.({ ratio: i / steps, message: `${level} 처리 중…` });
+      files[
+        fileNameFor(level, versionKey, format, detail, crs, pullIslands, false)
+      ] = await buildOne(
+        level,
+        versionKey,
+        format,
+        detail,
+        crs,
+        customProj4,
+        pullIslands,
+        signal,
+      );
+    }
   }
 
   throwIfAborted(signal);
@@ -333,12 +473,24 @@ const SIZE_LIGHT: Record<DownloadFormat, Record<Level, number>> = {
   gpkg: { emd: 3.6, sgg: 1.5, sido: 0.6 },
 };
 
+/**
+ * "많이 단순화" 산출물 크기 (실측, GeoJSON 기준 MB).
+ * 정점이 5.6% 로 줄어 light 대비 sgg 2.73 → 0.18 MB.
+ * gpkg 는 SQLite 오버헤드로 조금 크고, parquet 은 이 모드에서 불가.
+ */
+const SIZE_SUPER: Record<DownloadFormat, Partial<Record<Level, number>>> = {
+  geojson: { sgg: 0.18, sido: 0.05 },
+  gpkg: { sgg: 0.25, sido: 0.1 },
+  parquet: {},
+};
+
 export function estimateMb(
   format: DownloadFormat,
   detail: boolean,
   levels: Level[],
+  superSimplify = false,
 ): number {
-  const table = detail ? SIZE_DETAIL : SIZE_LIGHT;
+  const table = superSimplify ? SIZE_SUPER : detail ? SIZE_DETAIL : SIZE_LIGHT;
   return levels.reduce((sum, l) => sum + (table[format][l] ?? 0), 0);
 }
 

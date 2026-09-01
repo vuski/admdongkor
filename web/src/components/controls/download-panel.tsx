@@ -10,6 +10,8 @@ import {
   saveBlob,
   estimateMb,
   parquetBlocksIslandPull,
+  parquetBlocksSuper,
+  superBlocksEmd,
   parquetNeedsSourceCrs,
   nativeParquetCrs,
   FORMAT_LABEL,
@@ -48,6 +50,7 @@ export function DownloadPanel() {
   const [crs, setCrs] = useState<string>(SOURCE_CRS);
   const [customProj4, setCustomProj4] = useState("");
   const [pullIslands, setPullIslands] = useState(false);
+  const [superSimplify, setSuperSimplify] = useState(false);
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -55,16 +58,26 @@ export function DownloadPanel() {
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const estimate = useMemo(
-    () => estimateMb(format, detail, levels),
-    [format, detail, levels],
+    () => estimateMb(format, detail, levels, superSimplify),
+    [format, detail, levels, superSimplify],
   );
 
   const busy = progress !== null;
   const crsBlocked = parquetNeedsSourceCrs(format, crs, detail);
   const islandBlocked = parquetBlocksIslandPull(format, pullIslands);
+  // 많이 단순화는 시군구부터 다시 단순화하므로 읍면동을 만들 수 없다.
+  const emdPicked = levels.includes("emd");
+  const superAvailable = !emdPicked;
+  const superBlocked =
+    parquetBlocksSuper(format, superSimplify) ||
+    superBlocksEmd(superSimplify, levels);
   const customEmpty = crs === CUSTOM_CRS && !customProj4.trim();
   const canDownload =
-    levels.length > 0 && !crsBlocked && !islandBlocked && !customEmpty;
+    levels.length > 0 &&
+    !crsBlocked &&
+    !islandBlocked &&
+    !superBlocked &&
+    !customEmpty;
 
   function toggleLevel(id: Level) {
     setLevels((prev) =>
@@ -83,7 +96,7 @@ export function DownloadPanel() {
     // 궁금한 것이므로 포맷·해상도·좌표계·레벨을 모두 싣는다.
     const opts = {
       format,
-      resolution: detail ? "detail" : "light",
+      resolution: superSimplify ? "super" : detail ? "detail" : "light",
       // 커스텀 proj4 는 값 자체가 길고 개인 설정에 가까우므로 문자열 대신
       // "custom" 으로만 남긴다.
       crs: crs === CUSTOM_CRS ? "custom" : crs,
@@ -94,6 +107,7 @@ export function DownloadPanel() {
       version_source: picked === null ? "map" : "manual",
       estimate_mb: Math.round(estimate * 10) / 10,
       pull_islands: pullIslands,
+      super_simplify: superSimplify,
     };
     track(GA_EVENT.downloadStart, opts);
 
@@ -105,6 +119,7 @@ export function DownloadPanel() {
         format,
         detail,
         pullIslands,
+        superSimplify,
         crs,
         customProj4,
         onProgress: setProgress,
@@ -207,23 +222,50 @@ export function DownloadPanel() {
         <span className="text-[11px] font-medium block mb-1">해상도</span>
         <div className="flex gap-1">
           <button
-            onClick={() => setDetail(false)}
+            onClick={() => {
+              setDetail(false);
+              setSuperSimplify(false);
+            }}
             disabled={busy}
             className={cn(
               "flex-1 px-1.5 py-1.5 rounded-md border text-[11px] transition disabled:opacity-50",
-              !detail
+              !detail && !superSimplify
                 ? "border-accent bg-accent/10 font-medium"
                 : "border-border bg-background hover:border-accent/50",
             )}
           >
-            단순화
+            단순화(보통)
           </button>
           <button
-            onClick={() => setDetail(true)}
+            onClick={() => {
+              setDetail(false);
+              setSuperSimplify(true);
+            }}
+            // 읍면동이 선택되면 만들 수 없다 (시군구부터 다시 단순화하므로).
+            disabled={busy || !superAvailable}
+            title={
+              superAvailable
+                ? undefined
+                : "읍면동을 선택하면 쓸 수 없습니다 (시군구부터 다시 단순화)"
+            }
+            className={cn(
+              "flex-1 px-1.5 py-1.5 rounded-md border text-[11px] transition disabled:opacity-40 disabled:cursor-not-allowed",
+              superSimplify
+                ? "border-accent bg-accent/10 font-medium"
+                : "border-border bg-background hover:border-accent/50",
+            )}
+          >
+            단순화(많이)
+          </button>
+          <button
+            onClick={() => {
+              setDetail(true);
+              setSuperSimplify(false);
+            }}
             disabled={busy}
             className={cn(
               "flex-1 px-1.5 py-1.5 rounded-md border text-[11px] transition disabled:opacity-50",
-              detail
+              detail && !superSimplify
                 ? "border-accent bg-accent/10 font-medium"
                 : "border-border bg-background hover:border-accent/50",
             )}
@@ -232,10 +274,17 @@ export function DownloadPanel() {
           </button>
         </div>
         <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
-          {detail
-            ? "원본 해상도. 정밀 분석용이며 용량이 크다."
-            : "mapshaper 단순화. 웹 지도·개괄 분석용."}
+          {superSimplify
+            ? "시군구를 2.7% 로 크게 단순화 (시도는 그걸 병합). 브라우저에서 계산하며 몇 초 걸립니다."
+            : detail
+              ? "원본 해상도. 정밀 분석용이며 용량이 크다."
+              : "mapshaper 단순화. 웹 지도·개괄 분석용."}
         </p>
+        {!superAvailable && (
+          <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+            &lsquo;단순화(많이)&rsquo; 는 읍면동을 뺐을 때만 쓸 수 있습니다.
+          </p>
+        )}
       </div>
 
       {/* 좌표계 */}
@@ -279,6 +328,12 @@ export function DownloadPanel() {
           />
         )}
 
+        {parquetBlocksSuper(format, superSimplify) && (
+          <p className="text-[10px] text-amber-700 dark:text-amber-500 mt-1 leading-relaxed">
+            Parquet 은 브라우저에서 다시 쓸 수 없어 &lsquo;단순화(많이)&rsquo; 와
+            함께 받을 수 없습니다. GeoJSON 또는 GeoPackage 를 선택하세요.
+          </p>
+        )}
         {crsBlocked && (
           <p className="text-[10px] text-amber-700 dark:text-amber-500 mt-1 leading-relaxed">
             Parquet {detail ? "원본" : "단순화"} 은 {nativeParquetCrs(detail)} 로
@@ -308,7 +363,11 @@ export function DownloadPanel() {
                 <input
                   type="checkbox"
                   checked={on}
-                  onChange={() => toggleLevel(id)}
+                  onChange={() => {
+                    // 읍면동을 켜면 '많이 단순화' 는 불가능하므로 자동 해제.
+                    if (id === "emd" && !on) setSuperSimplify(false);
+                    toggleLevel(id);
+                  }}
                   disabled={busy}
                   className="accent-current"
                 />
