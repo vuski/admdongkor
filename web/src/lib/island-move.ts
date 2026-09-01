@@ -34,9 +34,18 @@
 
 import type { FeatureCollection, Feature, Position } from "geojson";
 
+/** 섬 이름 — 지시선을 이름으로 묶어 index 어긋남을 막는다. */
+type IslandName =
+  | "백령도"
+  | "연평도"
+  | "흑산도"
+  | "제주도"
+  | "울릉도"
+  | "독도";
+
 /** 섬 한 덩어리: 판정용 bbox(원래 위치) + 이동량. 전부 EPSG:5179(m). */
 interface IslandBox {
-  name: string;
+  name: IslandName;
   /** [minX, minY, maxX, maxY] — 원래 위치 기준. */
   bbox: [number, number, number, number];
   /** [dx, dy] — 이 만큼 평행이동 (m). */
@@ -89,14 +98,42 @@ const ISLANDS: IslandBox[] = [
  * 일점쇄선(dash-dot)은 지오메트리가 아니라 **표현(스타일)** 이라 데이터
  * 포맷에는 담기지 않는다. QGIS 등에서 이 레이어에 일점쇄선 스타일을 주면 된다.
  */
-const CONNECTOR_LINES: Position[][] = [
-  [[845606.4, 1984752.7], [854443.1, 1960673.7], [844250.8, 1937822.9]],
-  [[870642.9, 1976277.1], [877476.5, 1956268.8], [869817.9, 1938811.2]],
-  [[833440.4, 1654480.9], [845654.0, 1602799.3], [831821.4, 1550539.3]],
-  [[1038548.9, 1577874.7], [1091934.2, 1609870.8], [1163915.6, 1603703.6]],
-  [[1207850.3, 1933366.4], [1196127.3, 1923556.0], [1199892.5, 1906110.9]],
-  [[1190253.6, 1955410.6], [1174857.2, 1939390.8], [1179654.3, 1916154.5]],
+const CONNECTOR_LINES: { island: IslandName; coords: Position[] }[] = [
+  {
+    island: "백령도",
+    coords: [[845606.4, 1984752.7], [854443.1, 1960673.7], [844250.8, 1937822.9]],
+  },
+  {
+    island: "연평도",
+    coords: [[870642.9, 1976277.1], [877476.5, 1956268.8], [869817.9, 1938811.2]],
+  },
+  {
+    island: "흑산도",
+    coords: [[833440.4, 1654480.9], [845654.0, 1602799.3], [831821.4, 1550539.3]],
+  },
+  {
+    island: "제주도",
+    coords: [[1038548.9, 1577874.7], [1091934.2, 1609870.8], [1163915.6, 1603703.6]],
+  },
+  {
+    island: "독도",
+    coords: [[1207850.3, 1933366.4], [1196127.3, 1923556.0], [1199892.5, 1906110.9]],
+  },
+  {
+    island: "울릉도",
+    coords: [[1190253.6, 1955410.6], [1174857.2, 1939390.8], [1179654.3, 1916154.5]],
+  },
 ];
+
+/**
+ * "단순화(많이)"(시군구 2.7%) 에서 **완전히 사라지는** 섬.
+ * 섬이 없는데 지시선만 남으면 바다에 선이 떠 있게 되므로 함께 뺀다.
+ *
+ * 실측 (원본 light → 2.7%):
+ *   백령도 3→1   연평도 5→0   흑산도 20→0
+ *   제주도 13→2  울릉도 3→1   독도 2→2 (되붙이므로 유지)
+ */
+const GONE_WHEN_SUPER: IslandName[] = ["연평도", "흑산도"];
 
 /** ring 전체가 bbox 안에 들어오는가. 하나라도 벗어나면 false. */
 function ringInside(
@@ -153,11 +190,19 @@ export function pullInIslands(fc: FeatureCollection): number {
   return moved;
 }
 
-/** 지시선 6개를 LineString feature 로. 좌표계는 EPSG:5179. */
-export function connectorFeatures(): Feature[] {
-  return CONNECTOR_LINES.map((coords, i) => ({
+/**
+ * 지시선을 LineString feature 로. 좌표계는 EPSG:5179.
+ *
+ * @param superSimplify "단순화(많이)" 여부. true 면 그 해상도에서 사라지는
+ *   섬(연평도·흑산도) 의 지시선을 뺀다 — 섬 없이 선만 남으면 안 되므로.
+ */
+export function connectorFeatures(superSimplify = false): Feature[] {
+  const lines = superSimplify
+    ? CONNECTOR_LINES.filter((l) => !GONE_WHEN_SUPER.includes(l.island))
+    : CONNECTOR_LINES;
+  return lines.map(({ island, coords }, i) => ({
     type: "Feature" as const,
-    properties: { kind: "island_connector", seq: i + 1 },
+    properties: { kind: "island_connector", island, seq: i + 1 },
     // 매번 새 배열로 복사 — 이후 좌표 변환이 in-place 라 상수를 오염시키면 안 된다.
     geometry: {
       type: "LineString" as const,
@@ -167,6 +212,11 @@ export function connectorFeatures(): Feature[] {
 }
 
 /** 지시선만 담은 FeatureCollection (별도 레이어/파일용). */
-export function connectorFeatureCollection(): FeatureCollection {
-  return { type: "FeatureCollection", features: connectorFeatures() };
+export function connectorFeatureCollection(
+  superSimplify = false,
+): FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: connectorFeatures(superSimplify),
+  };
 }

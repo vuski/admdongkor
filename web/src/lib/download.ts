@@ -186,6 +186,8 @@ async function serializeFc(
   pullIslands: boolean,
   sourceCrs: string,
   signal?: AbortSignal,
+  /** "단순화(많이)" 여부 — 사라지는 섬의 지시선을 빼기 위해 필요. */
+  superSimplify = false,
 ): Promise<Uint8Array> {
   // 섬 당겨오기는 **EPSG:5179 기준 이동량**이라 5179 인 상태에서 해야 한다.
   // 평행이동 결과는 좌표계마다 다르고, 투영이 비선형이라 한 좌표계에서 잰
@@ -200,7 +202,7 @@ async function serializeFc(
     pullInIslands(fc);
     connectors = {
       type: "FeatureCollection",
-      features: connectorFeatures(),
+      features: connectorFeatures(superSimplify),
     };
     // 이제 둘 다 5179 다. 목표 좌표계 변환은 5179 에서 출발.
     const conv = await makeConverter(crs, customProj4, MOVE_CRS);
@@ -314,8 +316,11 @@ async function buildSuper(
   for (const [lv, fc] of out) {
     throwIfAborted(signal);
     onProgress?.({ ratio: 0.7, message: `${lv} 내보내는 중…` });
-    res.push([lv, await serializeFc(fc, lv, versionKey, format, crs,
-      customProj4, pullIslands, SOURCE_CRS, signal)]);
+    res.push([
+      lv,
+      await serializeFc(fc, lv, versionKey, format, crs, customProj4,
+        pullIslands, SOURCE_CRS, signal, true),
+    ]);
   }
   return res;
 }

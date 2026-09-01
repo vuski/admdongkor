@@ -11,7 +11,6 @@ import {
   estimateMb,
   parquetBlocksIslandPull,
   parquetBlocksSuper,
-  superBlocksEmd,
   parquetNeedsSourceCrs,
   nativeParquetCrs,
   FORMAT_LABEL,
@@ -46,11 +45,12 @@ export function DownloadPanel() {
 
   const [format, setFormat] = useState<DownloadFormat>("parquet");
   const [detail, setDetail] = useState(false);
-  const [levels, setLevels] = useState<Level[]>(["emd"]);
+  // 기본은 "단순화(많이)" 라 읍면동을 쓸 수 없다 → 시군구로 시작.
+  const [levels, setLevels] = useState<Level[]>(["sgg"]);
   const [crs, setCrs] = useState<string>(SOURCE_CRS);
   const [customProj4, setCustomProj4] = useState("");
   const [pullIslands, setPullIslands] = useState(false);
-  const [superSimplify, setSuperSimplify] = useState(false);
+  const [superSimplify, setSuperSimplify] = useState(true);
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -66,11 +66,9 @@ export function DownloadPanel() {
   const crsBlocked = parquetNeedsSourceCrs(format, crs, detail);
   const islandBlocked = parquetBlocksIslandPull(format, pullIslands);
   // 많이 단순화는 시군구부터 다시 단순화하므로 읍면동을 만들 수 없다.
-  const emdPicked = levels.includes("emd");
-  const superAvailable = !emdPicked;
-  const superBlocked =
-    parquetBlocksSuper(format, superSimplify) ||
-    superBlocksEmd(superSimplify, levels);
+  // UX: 해상도 선택이 우선이고, 그에 따라 읍면동 체크박스가 잠긴다.
+  const emdDisabled = superSimplify;
+  const superBlocked = parquetBlocksSuper(format, superSimplify);
   const customEmpty = crs === CUSTOM_CRS && !customProj4.trim();
   const canDownload =
     levels.length > 0 &&
@@ -240,14 +238,13 @@ export function DownloadPanel() {
             onClick={() => {
               setDetail(false);
               setSuperSimplify(true);
+              // 읍면동은 만들 수 없으므로 선택에서 빼준다.
+              setLevels((prev) => {
+                const next = prev.filter((l) => l !== "emd");
+                return next.length > 0 ? next : ["sgg"];
+              });
             }}
-            // 읍면동이 선택되면 만들 수 없다 (시군구부터 다시 단순화하므로).
-            disabled={busy || !superAvailable}
-            title={
-              superAvailable
-                ? undefined
-                : "읍면동을 선택하면 쓸 수 없습니다 (시군구부터 다시 단순화)"
-            }
+            disabled={busy}
             className={cn(
               "flex-1 px-1.5 py-1.5 rounded-md border text-[11px] transition disabled:opacity-40 disabled:cursor-not-allowed",
               superSimplify
@@ -280,9 +277,9 @@ export function DownloadPanel() {
               ? "원본 해상도. 정밀 분석용이며 용량이 크다."
               : "mapshaper 단순화. 웹 지도·개괄 분석용."}
         </p>
-        {!superAvailable && (
+        {superSimplify && (
           <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
-            &lsquo;단순화(많이)&rsquo; 는 읍면동을 뺐을 때만 쓸 수 있습니다.
+            시군구부터 다시 단순화하므로 읍면동은 만들 수 없습니다.
           </p>
         )}
       </div>
@@ -349,26 +346,31 @@ export function DownloadPanel() {
         <div className="flex gap-1">
           {LEVELS.map(({ id, label }) => {
             const on = levels.includes(id);
+            // '단순화(많이)' 는 시군구부터 다시 단순화하므로 읍면동을 못 만든다.
+            const off = busy || (id === "emd" && emdDisabled);
             return (
               <label
                 key={id}
+                title={
+                  id === "emd" && emdDisabled
+                    ? "'단순화(많이)' 에서는 읍면동을 만들 수 없습니다"
+                    : undefined
+                }
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-md border text-[11px] cursor-pointer transition",
+                  "flex-1 flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-md border text-[11px] transition",
                   on
                     ? "border-accent bg-accent/10 font-medium"
                     : "border-border bg-background hover:border-accent/50",
-                  busy && "opacity-50 cursor-not-allowed",
+                  off
+                    ? "opacity-40 cursor-not-allowed"
+                    : "cursor-pointer",
                 )}
               >
                 <input
                   type="checkbox"
                   checked={on}
-                  onChange={() => {
-                    // 읍면동을 켜면 '많이 단순화' 는 불가능하므로 자동 해제.
-                    if (id === "emd" && !on) setSuperSimplify(false);
-                    toggleLevel(id);
-                  }}
-                  disabled={busy}
+                  onChange={() => toggleLevel(id)}
+                  disabled={off}
                   className="accent-current"
                 />
                 {label}

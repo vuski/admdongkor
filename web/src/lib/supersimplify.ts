@@ -45,29 +45,47 @@ declare global {
   }
 }
 
-/** public/mapshaper.js 경로. next basePath 를 쓰면 여기도 맞춰야 한다. */
-const MAPSHAPER_SRC = "/mapshaper.js";
+/**
+ * mapshaper 브라우저 번들은 **두 파일**이고 순서가 중요하다.
+ *
+ *   modules.js    → `window.modules` 에 mproj·buffer·iconv-lite 등을 올린다
+ *   mapshaper.js  → 로드 시 `window.modules[name]` 으로 그걸 꺼내 쓴다
+ *
+ * modules.js 를 빼면 mapshaper.js 가 `require$1('mproj')` 에서 undefined 를
+ * 받아 조용히 실패한다 (에러 없이 window.mapshaper 가 안 붙거나, 붙어도
+ * 좌표계 처리에서 터진다). next basePath 를 쓰면 이 경로도 맞춰야 한다.
+ */
+const MAPSHAPER_SRCS = ["/modules.js", "/mapshaper.js"];
 
 let loading: Promise<MapshaperApi> | null = null;
+
+/** script 하나를 로드한다. */
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement("script");
+    el.src = src;
+    el.async = false; // 순서 보장 (modules.js 가 먼저여야 한다)
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error(`스크립트를 불러오지 못했습니다: ${src}`));
+    document.head.appendChild(el);
+  });
+}
 
 /** 브라우저 mapshaper 를 1회만 로드한다 (중복 호출은 같은 Promise 를 공유). */
 function loadMapshaper(): Promise<MapshaperApi> {
   if (window.mapshaper) return Promise.resolve(window.mapshaper);
   if (loading) return loading;
-  loading = new Promise<MapshaperApi>((resolve, reject) => {
-    const el = document.createElement("script");
-    el.src = MAPSHAPER_SRC;
-    el.async = true;
-    el.onload = () => {
-      if (window.mapshaper) resolve(window.mapshaper);
-      else reject(new Error("mapshaper 로드 실패: window.mapshaper 없음"));
-    };
-    el.onerror = () => {
+  loading = (async () => {
+    for (const src of MAPSHAPER_SRCS) await loadScript(src);
+    const api = window.mapshaper;
+    if (!api) {
       loading = null; // 재시도 가능하게
-      reject(new Error(`mapshaper 를 불러오지 못했습니다 (${MAPSHAPER_SRC})`));
-    };
-    document.head.appendChild(el);
-  });
+      throw new Error(
+        "mapshaper 로드 실패: window.mapshaper 가 설정되지 않았습니다.",
+      );
+    }
+    return api;
+  })();
   return loading;
 }
 
