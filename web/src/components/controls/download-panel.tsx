@@ -9,6 +9,7 @@ import {
   buildDownload,
   saveBlob,
   estimateMb,
+  parquetBlocksIslandPull,
   parquetNeedsSourceCrs,
   nativeParquetCrs,
   FORMAT_LABEL,
@@ -46,6 +47,7 @@ export function DownloadPanel() {
   const [levels, setLevels] = useState<Level[]>(["emd"]);
   const [crs, setCrs] = useState<string>(SOURCE_CRS);
   const [customProj4, setCustomProj4] = useState("");
+  const [pullIslands, setPullIslands] = useState(false);
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -59,8 +61,10 @@ export function DownloadPanel() {
 
   const busy = progress !== null;
   const crsBlocked = parquetNeedsSourceCrs(format, crs, detail);
+  const islandBlocked = parquetBlocksIslandPull(format, pullIslands);
   const customEmpty = crs === CUSTOM_CRS && !customProj4.trim();
-  const canDownload = levels.length > 0 && !crsBlocked && !customEmpty;
+  const canDownload =
+    levels.length > 0 && !crsBlocked && !islandBlocked && !customEmpty;
 
   function toggleLevel(id: Level) {
     setLevels((prev) =>
@@ -89,6 +93,7 @@ export function DownloadPanel() {
       // 지도에서 보던 시점 그대로인지, 따로 골랐는지.
       version_source: picked === null ? "map" : "manual",
       estimate_mb: Math.round(estimate * 10) / 10,
+      pull_islands: pullIslands,
     };
     track(GA_EVENT.downloadStart, opts);
 
@@ -99,6 +104,7 @@ export function DownloadPanel() {
         levels,
         format,
         detail,
+        pullIslands,
         crs,
         customProj4,
         onProgress: setProgress,
@@ -311,6 +317,52 @@ export function DownloadPanel() {
             );
           })}
         </div>
+      </div>
+
+      {/* 섬 지역 당겨오기 */}
+      <div>
+        <label
+          className={cn(
+            "flex items-start gap-2 px-2 py-2 rounded-md border cursor-pointer transition",
+            pullIslands
+              ? "border-accent bg-accent/10"
+              : "border-border bg-background hover:border-accent/50",
+            busy && "opacity-50 cursor-not-allowed",
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={pullIslands}
+            onChange={(e) => setPullIslands(e.target.checked)}
+            disabled={busy}
+            className="accent-current mt-0.5"
+          />
+          <span className="min-w-0">
+            <span className="text-[11px] font-medium block">
+              섬 지역 당겨오기
+            </span>
+            <span className="text-[10px] text-muted-foreground leading-relaxed block mt-0.5">
+              백령도·연평도·흑산도·제주도·울릉도·독도를 육지 가까이 옮기고,
+              원래 자리가 아님을 알리는 지시선을 함께 넣습니다.
+            </span>
+          </span>
+        </label>
+
+        {islandBlocked && (
+          <p className="text-[10px] text-amber-700 dark:text-amber-500 mt-1 leading-relaxed">
+            Parquet 은 브라우저에서 다시 쓸 수 없어 섬 당겨오기와 함께 받을 수
+            없습니다. GeoJSON 또는 GeoPackage 를 선택하세요.
+          </p>
+        )}
+        {pullIslands && !islandBlocked && (
+          <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+            지시선은 {format === "gpkg"
+              ? "`island_connector` 레이어로 따로"
+              : "`kind: island_connector` 속성으로 같은 파일에"}{" "}
+            들어갑니다. 일점쇄선은 스타일이라 데이터에는 담기지 않으니 QGIS 등에서
+            지정하세요.
+          </p>
+        )}
       </div>
 
       {/* 요약 + 실행 */}

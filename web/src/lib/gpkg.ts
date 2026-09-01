@@ -216,6 +216,12 @@ export interface GpkgOptions {
    * 쓰고 우리는 디렉토리만 지정한다. (public/ 에 두 파일 모두 둔다.)
    */
   wasmDir?: string;
+  /**
+   * 같은 파일에 함께 넣을 **추가 레이어**. GeoPackage 는 한 파일에 여러
+   * 피처 테이블을 담을 수 있어, 경계 폴리곤과 지시선을 분리해 각각 다른
+   * 스타일을 줄 수 있다 (QGIS 에서 일점쇄선 지정 등).
+   */
+  extraLayers?: { tableName: string; fc: FeatureCollection }[];
 }
 
 /**
@@ -292,91 +298,96 @@ export async function featureCollectionToGpkg(
     for (const r of srsRows) srsStmt.run(r);
     srsStmt.free();
 
-    // ── 피처 테이블 ──
-    const features = fc.features ?? [];
-    const cols = inferColumns(features);
-    // GPKG 예약 컬럼과 충돌 방지
-    cols.delete("fid");
-    cols.delete("geom");
+    const writeLayer = (layerTable: string, layerFc: FeatureCollection): void => {
+      // ── 피처 테이블 ──
+      const features = layerFc.features ?? [];
+      const cols = inferColumns(features);
+      // GPKG 예약 컬럼과 충돌 방지
+      cols.delete("fid");
+      cols.delete("geom");
 
-    const colDefs = [...cols.entries()]
-      .map(([name, type]) => `${sqlIdent(name)} ${type}`)
-      .join(", ");
-    db.run(
-      `CREATE TABLE ${sqlIdent(tableName)} (` +
-        "fid INTEGER PRIMARY KEY AUTOINCREMENT, geom BLOB" +
-        (colDefs ? ", " + colDefs : "") +
-        ")",
-    );
+      const colDefs = [...cols.entries()]
+        .map(([name, type]) => `${sqlIdent(name)} ${type}`)
+        .join(", ");
+      db.run(
+        `CREATE TABLE ${sqlIdent(layerTable)} (` +
+          "fid INTEGER PRIMARY KEY AUTOINCREMENT, geom BLOB" +
+          (colDefs ? ", " + colDefs : "") +
+          ")",
+      );
 
-    const colNames = [...cols.keys()];
-    const placeholders = ["?", ...colNames.map(() => "?")].join(",");
-    const insert = db.prepare(
-      `INSERT INTO ${sqlIdent(tableName)} (geom${
-        colNames.length ? ", " + colNames.map(sqlIdent).join(", ") : ""
-      }) VALUES (${placeholders})`,
-    );
+      const colNames = [...cols.keys()];
+      const placeholders = ["?", ...colNames.map(() => "?")].join(",");
+      const insert = db.prepare(
+        `INSERT INTO ${sqlIdent(layerTable)} (geom${
+          colNames.length ? ", " + colNames.map(sqlIdent).join(", ") : ""
+        }) VALUES (${placeholders})`,
+      );
 
-    const total: Bbox = {
-      minX: Infinity,
-      minY: Infinity,
-      maxX: -Infinity,
-      maxY: -Infinity,
-    };
-    let geomType = "GEOMETRY";
-    const seenTypes = new Set<string>();
+      const total: Bbox = {
+        minX: Infinity,
+        minY: Infinity,
+        maxX: -Infinity,
+        maxY: -Infinity,
+      };
+      let geomType = "GEOMETRY";
+      const seenTypes = new Set<string>();
 
-    db.run("BEGIN");
-    for (const f of features) {
-      if (!f.geometry) continue;
-      seenTypes.add(f.geometry.type);
-      extendBbox(total, f.geometry);
-      const row: SqlValue[] = [gpkgGeometryBlob(f.geometry, srsId)];
-      const props = f.properties ?? {};
-      for (const name of colNames) {
-        const v = (props as Record<string, unknown>)[name];
-        if (v === null || v === undefined) row.push(null);
-        else if (typeof v === "number") row.push(v);
-        else if (typeof v === "string") row.push(v);
-        else row.push(JSON.stringify(v));
+      db.run("BEGIN");
+      for (const f of features) {
+        if (!f.geometry) continue;
+        seenTypes.add(f.geometry.type);
+        extendBbox(total, f.geometry);
+        const row: SqlValue[] = [gpkgGeometryBlob(f.geometry, srsId)];
+        const props = f.properties ?? {};
+        for (const name of colNames) {
+          const v = (props as Record<string, unknown>)[name];
+          if (v === null || v === undefined) row.push(null);
+          else if (typeof v === "number") row.push(v);
+          else if (typeof v === "string") row.push(v);
+          else row.push(JSON.stringify(v));
+        }
+        insert.run(row);
       }
-      insert.run(row);
-    }
-    db.run("COMMIT");
-    insert.free();
+      db.run("COMMIT");
+      insert.free();
 
-    if (seenTypes.size === 1) geomType = [...seenTypes][0]!.toUpperCase();
-    else if (
-      seenTypes.size === 2 &&
-      seenTypes.has("Polygon") &&
-      seenTypes.has("MultiPolygon")
-    ) {
-      // 혼재 시 상위 타입으로. QGIS 가 둘 다 읽는다.
-      geomType = "MULTIPOLYGON";
-    }
+      if (seenTypes.size === 1) geomType = [...seenTypes][0]!.toUpperCase();
+      else if (
+        seenTypes.size === 2 &&
+        seenTypes.has("Polygon") &&
+        seenTypes.has("MultiPolygon")
+      ) {
+        // 혼재 시 상위 타입으로. QGIS 가 둘 다 읽는다.
+        geomType = "MULTIPOLYGON";
+      }
 
-    const hasExtent = Number.isFinite(total.minX);
-    const contents = db.prepare(
-      "INSERT INTO gpkg_contents " +
-        "(table_name, data_type, identifier, description, min_x, min_y, max_x, max_y, srs_id) " +
-        "VALUES (?,'features',?,'',?,?,?,?,?)",
-    );
-    contents.run([
-      tableName,
-      tableName,
-      hasExtent ? total.minX : null,
-      hasExtent ? total.minY : null,
-      hasExtent ? total.maxX : null,
-      hasExtent ? total.maxY : null,
-      srsId,
-    ]);
-    contents.free();
+      const hasExtent = Number.isFinite(total.minX);
+      const contents = db.prepare(
+        "INSERT INTO gpkg_contents " +
+          "(table_name, data_type, identifier, description, min_x, min_y, max_x, max_y, srs_id) " +
+          "VALUES (?,'features',?,'',?,?,?,?,?)",
+      );
+      contents.run([
+        layerTable,
+        layerTable,
+        hasExtent ? total.minX : null,
+        hasExtent ? total.minY : null,
+        hasExtent ? total.maxX : null,
+        hasExtent ? total.maxY : null,
+        srsId,
+      ]);
+      contents.free();
 
-    const gcols = db.prepare(
-      "INSERT INTO gpkg_geometry_columns VALUES (?,'geom',?,?,0,0)",
-    );
-    gcols.run([tableName, geomType, srsId]);
-    gcols.free();
+      const gcols = db.prepare(
+        "INSERT INTO gpkg_geometry_columns VALUES (?,'geom',?,?,0,0)",
+      );
+      gcols.run([layerTable, geomType, srsId]);
+      gcols.free();
+    };
+
+    writeLayer(tableName, fc);
+    for (const ex of options.extraLayers ?? []) writeLayer(ex.tableName, ex.fc);
 
     const bytes = db.export();
     // sql.js 의 PRAGMA application_id 가 헤더에 반영되지 않는 빌드가 있어

@@ -15,6 +15,7 @@ import { get, getParquet } from "admdongkor";
 import type { Level } from "admdongkor";
 import type { FeatureCollection, Geometry, Position } from "geojson";
 
+import { connectorFeatures, pullInIslands } from "./island-move";
 import {
   CUSTOM_CRS,
   SOURCE_CRS,
@@ -59,6 +60,8 @@ export interface DownloadRequest {
   crs: string;
   /** crs === CUSTOM_CRS 일 때 쓸 proj4 문자열. */
   customProj4?: string;
+  /** 섬 지역(백령·연평·흑산·제주·울릉·독도) 을 육지 가까이 당겨온다. */
+  pullIslands?: boolean;
   onProgress?: (p: DownloadProgress) => void;
   signal?: AbortSignal;
 }
@@ -112,6 +115,20 @@ export function parquetNeedsSourceCrs(
   return format === "parquet" && crs !== nativeParquetCrs(detail);
 }
 
+/**
+ * parquet + 섬 당겨오기는 불가능하다.
+ *
+ * 섬 이동은 지오메트리를 고쳐 **다시 써야** 하는데, 브라우저에서 parquet 을
+ * 쓰는 수단이 없다 (hyparquet 은 reader 전용). 바이트 통과 경로로는 이동된
+ * 결과를 낼 수 없으므로 UI 에서 미리 막고 대안을 안내한다.
+ */
+export function parquetBlocksIslandPull(
+  format: DownloadFormat,
+  pullIslands: boolean,
+): boolean {
+  return format === "parquet" && pullIslands;
+}
+
 /** parquet 파일이 실제로 저장하고 있는 좌표계. */
 export function nativeParquetCrs(detail: boolean): string {
   return detail ? "EPSG:5179" : "EPSG:4326";
@@ -124,10 +141,11 @@ async function buildOne(
   detail: boolean,
   crs: string,
   customProj4: string | undefined,
+  pullIslands: boolean,
   signal?: AbortSignal,
 ): Promise<Uint8Array> {
-  if (format === "parquet") {
-    // 좌표 변환이 없을 때만 도달한다 (UI 에서 막음). 바이트 그대로 통과.
+  if (format === "parquet" && !pullIslands) {
+    // 좌표 변환도 섬 이동도 없을 때만 도달한다. 바이트 그대로 통과.
     const buf = await getParquet(versionKey, level, { detail, signal });
     return new Uint8Array(buf);
   }
@@ -141,8 +159,34 @@ async function buildOne(
   // 출발 좌표계는 파일마다 다르다: light=4326, 원본=5179.
   // get() 이 알려주는 값을 그대로 믿되, 없으면 detail 로 추정한다.
   const sourceCrs = fc.crs ?? (detail ? "EPSG:5179" : SOURCE_CRS);
-  const conv = await makeConverter(crs, customProj4, sourceCrs);
-  if (conv) transformFeatureCollection(fc, conv);
+
+  // 섬 당겨오기는 **EPSG:4326 기준 이동량**이라 좌표 변환보다 먼저,
+  // 그리고 4326 인 상태에서 해야 한다. 원본(5179) 은 4326 으로 돌린 뒤 적용.
+  let connectors: FeatureCollection | null = null;
+  if (pullIslands) {
+    const to4326 = await makeConverter(SOURCE_CRS, undefined, sourceCrs);
+    if (to4326) transformFeatureCollection(fc, to4326);
+    pullInIslands(fc);
+    connectors = {
+      type: "FeatureCollection",
+      features: connectorFeatures(),
+    };
+    // 이제 둘 다 4326 이다. 목표 좌표계 변환은 4326 에서 출발.
+    const conv4326 = await makeConverter(crs, customProj4, SOURCE_CRS);
+    if (conv4326) {
+      transformFeatureCollection(fc, conv4326);
+      transformFeatureCollection(connectors, conv4326);
+    }
+    // GeoJSON 은 레이어 개념이 없으므로 한 컬렉션에 합친다.
+    // (properties.kind === "island_connector" 로 구분 가능)
+    if (format === "geojson") {
+      fc.features.push(...connectors.features);
+      connectors = null;
+    }
+  } else {
+    const conv = await makeConverter(crs, customProj4, sourceCrs);
+    if (conv) transformFeatureCollection(fc, conv);
+  }
   throwIfAborted(signal);
 
   if (format === "geojson") {
@@ -155,6 +199,10 @@ async function buildOne(
   return featureCollectionToGpkg(fc, {
     tableName: `${level}_${versionKey}`,
     srsId: crsSrsId(crs),
+    // 지시선은 별도 레이어로 — QGIS 에서 따로 일점쇄선 스타일을 줄 수 있다.
+    extraLayers: connectors
+      ? [{ tableName: "island_connector", fc: connectors }]
+      : undefined,
   });
 }
 
@@ -178,10 +226,13 @@ function fileNameFor(
   format: DownloadFormat,
   detail: boolean,
   crs: string,
+  pullIslands: boolean,
 ): string {
   const res = detail ? "" : "_light";
   const proj = crs === SOURCE_CRS ? "" : `_${crsSuffix(crs)}`;
-  return `${level}_${versionKey}${res}${proj}.${EXT[format]}`;
+  // 원본과 헷갈리면 안 되므로 파일명에 명시한다.
+  const isl = pullIslands ? "_pulled" : "";
+  return `${level}_${versionKey}${res}${proj}${isl}.${EXT[format]}`;
 }
 
 export async function buildDownload({
@@ -191,10 +242,18 @@ export async function buildDownload({
   detail,
   crs,
   customProj4,
+  pullIslands = false,
   onProgress,
   signal,
 }: DownloadRequest): Promise<{ blob: Blob; filename: string }> {
   if (levels.length === 0) throw new Error("경계 단위를 하나 이상 선택하세요.");
+  if (parquetBlocksIslandPull(format, pullIslands)) {
+    throw new Error(
+      "Parquet 은 섬 지역 당겨오기와 함께 받을 수 없습니다 " +
+        "(브라우저에서 parquet 을 다시 쓸 수 없음). " +
+        "GeoJSON 또는 GeoPackage 를 선택하세요.",
+    );
+  }
   if (parquetNeedsSourceCrs(format, crs, detail)) {
     throw new Error(
       `Parquet 은 저장된 좌표계(${nativeParquetCrs(detail)})로만 받을 수 있습니다. ` +
@@ -212,13 +271,15 @@ export async function buildDownload({
     const level = levels[i]!;
     throwIfAborted(signal);
     onProgress?.({ ratio: i / steps, message: `${level} 처리 중…` });
-    files[fileNameFor(level, versionKey, format, detail, crs)] = await buildOne(
+    files[fileNameFor(level, versionKey, format, detail, crs, pullIslands)] =
+      await buildOne(
       level,
       versionKey,
       format,
       detail,
       crs,
       customProj4,
+      pullIslands,
       signal,
     );
   }
