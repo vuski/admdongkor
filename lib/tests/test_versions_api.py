@@ -5,7 +5,19 @@ from __future__ import annotations
 import pytest
 
 import admdongkor as adk
+from admdongkor import _cache
+from admdongkor._versions import VERSIONS
 from admdongkor.api import VersionList
+
+
+@pytest.fixture(autouse=True)
+def _no_manifest(monkeypatch):
+    """사용자 캐시의 manifest 를 격리 — 결과가 패키지 스냅샷 VERSIONS 만으로 정해지게.
+
+    get_list()/versions() 는 캐시된 manifest 의 versions 를 합치므로, 격리하지 않으면
+    테스트 결과가 실행 환경의 캐시 상태에 따라 달라진다.
+    """
+    monkeypatch.setattr(_cache, "manifest_versions", lambda: None)
 
 
 def test_returns_version_list():
@@ -34,13 +46,13 @@ def test_head_custom():
 def test_tail_default_5():
     v = adk.versions().tail()
     assert len(v) == 5
-    assert v[-1] == "20260401"
+    assert v[-1] == VERSIONS[-1]
 
 
 def test_tail_custom():
     v = adk.versions().tail(2)
     assert len(v) == 2
-    assert v[-1] == "20260401"
+    assert v[-1] == VERSIONS[-1]
 
 
 def test_year_filter():
@@ -69,7 +81,7 @@ def test_year_bool_raises():
 def test_indexable():
     v = adk.versions()
     assert v[0] == "19751231"
-    assert v[-1] == "20260401"
+    assert v[-1] == VERSIONS[-1]
     assert v[0:3] == ["19751231", "19801231", "19851231"]
 
 

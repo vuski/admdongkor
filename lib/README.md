@@ -32,7 +32,7 @@ manifest 와 비교해 **필요시에만 갱신** — 데이터 수정(예: 과�
 import admdongkor as adk
 
 # 1. 어떤 버전이 있는지
-adk.versions()                # 62개 전체 (list 서브클래스)
+adk.versions()                # 전체 (list 서브클래스). 패키지 배포 이후 추가된 시점도 포함
 adk.versions().head()         # 처음 5개
 adk.versions().tail()         # 최근 5개
 adk.versions(2025)            # 해당 연도만

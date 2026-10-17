@@ -15,6 +15,33 @@ from ._versions import VERSIONS
 
 report_issue = _report.report_issue
 
+
+def _available_versions() -> list[str]:
+    """사용 가능한 버전 키 목록 = 패키지 스냅샷 `VERSIONS` ∪ 캐시된 manifest 의 `versions`.
+
+    manifest 는 import 시 자동 갱신되므로, 새 시점이 dist/data/ 에 추가되면
+    **패키지 재배포 없이** 여기에 나타난다. 한쪽만 쓰지 않고 합집합을 쓰는 이유:
+    오프라인 등으로 manifest 캐시가 패키지보다 오래되면, manifest 만 쓸 경우
+    오히려 패키지가 아는 최신 시점이 빠진다.
+    """
+    return sorted(set(VERSIONS).union(_cache.manifest_versions() or ()))
+
+
+def _check_version(key: str, label: str = "version key") -> None:
+    """버전 키 검증. 모르는 키면 ValueError.
+
+    스냅샷에 있는 키는 디스크도 읽지 않고 바로 통과시킨다. 스냅샷에 없을 때만
+    manifest 를 확인해, 패키지 배포 이후 추가된 시점을 받아들인다.
+    """
+    if key in VERSIONS:
+        return
+    if key in (_cache.manifest_versions() or ()):
+        return
+    raise ValueError(
+        f"unknown {label}: {key!r}. "
+        "Use adk.get_list() to see available keys."
+    )
+
 Level = Literal["emd", "sgg", "sido"]
 _LEVELS: tuple[Level, ...] = ("emd", "sgg", "sido")
 
@@ -41,32 +68,38 @@ def versions(year: int | None = None) -> VersionList:
     - `adk.versions(2005)` → 해당 연도만
     - `adk.versions().head()` / `.tail()` → 처음/마지막 5개
 
+    패키지 배포 이후 추가된 시점도 포함한다 (캐시된 manifest 기준).
+
     Args:
         year: 4자리 연도. **int 만 허용** (문자열 입력은 TypeError).
     """
+    keys = _available_versions()
     if year is None:
-        return VersionList(VERSIONS)
+        return VersionList(keys)
     if not isinstance(year, int) or isinstance(year, bool):
         raise TypeError(f"year must be int, got {type(year).__name__}")
     prefix = f"{year:04d}"
-    return VersionList(k for k in VERSIONS if k.startswith(prefix))
+    return VersionList(k for k in keys if k.startswith(prefix))
 
 
 def get_list(year: int | None = None) -> list[str]:
     """버전 키 목록.
 
-    - `get_list()` → 전체 61개
+    - `get_list()` → 전체
     - `get_list(year=2025)` → 해당 연도 버전만
+
+    패키지 배포 이후 추가된 시점도 포함한다 (캐시된 manifest 기준).
 
     Args:
         year: 4자리 연도. **int 만 허용** (문자열은 TypeError).
     """
+    keys = _available_versions()
     if year is None:
-        return list(VERSIONS)
+        return keys
     if not isinstance(year, int) or isinstance(year, bool):
         raise TypeError(f"year must be int, got {type(year).__name__}")
     prefix = f"{year:04d}"
-    return [k for k in VERSIONS if k.startswith(prefix)]
+    return [k for k in keys if k.startswith(prefix)]
 
 
 def find(
@@ -196,11 +229,7 @@ def get(
             f"key must be a version key string like '20250401', got {type(key).__name__}. "
             "Use adk.get_list() to see available keys."
         )
-    if key not in VERSIONS:
-        raise ValueError(
-            f"unknown version key: {key!r}. "
-            "Use adk.get_list() to see available keys."
-        )
+    _check_version(key)
     if level not in _LEVELS:
         raise ValueError(f"level must be one of {_LEVELS}, got {level!r}")
 
@@ -255,11 +284,7 @@ def match_adm(
         >>> adk.match_adm(base="20251231", region="27", target=["20111231", "20241231"]).sgg()
         # sgg 단위 집계 (각 sgg 의 몇 %가 base 영역에 속하는가)
     """
-    if base not in VERSIONS:
-        raise ValueError(
-            f"unknown base version key: {base!r}. "
-            "Use adk.get_list() to see available keys."
-        )
+    _check_version(base, "base version key")
     if isinstance(target, str):
         target_list = [target]
     elif isinstance(target, list):
@@ -267,11 +292,7 @@ def match_adm(
     else:
         raise TypeError("target must be str or list[str]")
     for t in target_list:
-        if t not in VERSIONS:
-            raise ValueError(
-                f"unknown target version key: {t!r}. "
-                "Use adk.get_list() to see available keys."
-            )
+        _check_version(t, "target version key")
     return _match.match_adm(
         base=base, region=region, target=target, min_weight=min_weight,
     )
@@ -332,9 +353,5 @@ def compare(versions: list[str], threshold: float = 0.99) -> CompareResult:
     if not isinstance(versions, list):
         raise TypeError(f"versions must be list, got {type(versions).__name__}")
     for v in versions:
-        if v not in VERSIONS:
-            raise ValueError(
-                f"unknown version key: {v!r}. "
-                "Use adk.get_list() to see available keys."
-            )
+        _check_version(v)
     return _compare.compare(versions=versions, threshold=threshold)

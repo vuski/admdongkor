@@ -18,7 +18,7 @@ from .api import (
     versions,
 )
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 __all__ = [
     "get", "get_list", "versions", "find", "find_offices", "match_adm", "compare",
     "changelog", "data_version", "report_issue", "cache_dir", "__version__",

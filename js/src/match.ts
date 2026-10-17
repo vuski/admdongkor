@@ -1,5 +1,5 @@
 import { loadIndexFile, type LoaderOptions } from "./_index-loader.js";
-import { VERSIONS } from "./versions.js";
+import { assertKnownVersion } from "./versions.js";
 
 interface TimelineEmdRow {
   version_key: string;
@@ -111,16 +111,12 @@ export async function matchAdm(opts: MatchOptions): Promise<MatchResult> {
 
   if (typeof base !== "string") throw new TypeError("base must be string");
   if (typeof region !== "string") throw new TypeError("region must be string");
-  if (!(VERSIONS as readonly string[]).includes(base)) {
-    throw new Error(`unknown base version key: ${JSON.stringify(base)}`);
-  }
+  await assertKnownVersion(base, "base version key", opts);
   const targets = Array.isArray(target) ? target : [target];
   if (targets.length === 0) throw new Error("target must have at least one version key");
   for (const t of targets) {
     if (typeof t !== "string") throw new TypeError("target items must be strings");
-    if (!(VERSIONS as readonly string[]).includes(t)) {
-      throw new Error(`unknown target version key: ${JSON.stringify(t)}`);
-    }
+    await assertKnownVersion(t, "target version key", opts);
   }
 
   const [tl, sp] = await Promise.all([

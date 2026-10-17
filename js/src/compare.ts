@@ -1,5 +1,5 @@
 import { loadIndexFile, type LoaderOptions } from "./_index-loader.js";
-import { VERSIONS } from "./versions.js";
+import { assertKnownVersion } from "./versions.js";
 
 interface TimelineRow {
   level: string;
@@ -80,9 +80,7 @@ export async function compare(
     throw new TypeError("versions items must be strings");
   }
   for (const v of [va, vb]) {
-    if (!(VERSIONS as readonly string[]).includes(v)) {
-      throw new Error(`unknown version key: ${JSON.stringify(v)}`);
-    }
+    await assertKnownVersion(v, "version key", options);
   }
   const threshold = options.threshold ?? 0.99;
   if (!(threshold >= 0 && threshold <= 1)) {

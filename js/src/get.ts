@@ -8,26 +8,29 @@ import type {
   GetOptions,
   Level,
 } from "./types.js";
-import { VERSIONS } from "./versions.js";
+import { assertKnownVersion } from "./versions.js";
 
 const DEFAULT_BASE_URL =
   "https://raw.githubusercontent.com/vuski/admdongkor/master/parquet";
 
 const LEVELS: readonly Level[] = ["emd", "sgg", "sido"] as const;
 
-function validateArgs(key: string, level: Level): void {
+async function validateArgs(
+  key: string,
+  level: Level,
+  options: GetOptions,
+): Promise<void> {
   if (typeof key !== "string") {
     throw new TypeError(
       `key must be a version key string like '20250401', got ${typeof key}. ` +
-        "Use versions() to see available keys.",
+        "Use versionsAsync() to see available keys.",
     );
   }
-  if (!(VERSIONS as readonly string[]).includes(key)) {
-    throw new Error(
-      `unknown version key: ${JSON.stringify(key)}. ` +
-        "Use versions() to see available keys.",
-    );
-  }
+  await assertKnownVersion(key, "version key", {
+    baseUrl: options.indexBaseUrl,
+    fetch: options.fetch,
+    signal: options.signal,
+  });
   if (!LEVELS.includes(level)) {
     throw new Error(
       `level must be one of ${JSON.stringify(LEVELS)}, got ${JSON.stringify(level)}`,
@@ -55,7 +58,7 @@ export async function getParquet(
   level: Level = "emd",
   options: GetOptions = {},
 ): Promise<ArrayBuffer> {
-  validateArgs(key, level);
+  await validateArgs(key, level, options);
   const detail = options.detail ?? false;
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchFn = options.fetch ?? fetch;

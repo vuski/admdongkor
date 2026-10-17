@@ -5,6 +5,11 @@ export interface GetOptions {
   detail?: boolean;
   /** fetch 기본 URL 오버라이드. 테스트 / 자체 호스팅용. */
   baseUrl?: string;
+  /**
+   * 인덱스(dist/data) 기본 URL 오버라이드. 패키지 배포 이후 추가된 시점을
+   * 검증할 때 이 경로의 `manifest.json` 을 읽는다. 기본은 GitHub dist/data.
+   */
+  indexBaseUrl?: string;
   /** 커스텀 fetch (Node 18+ 는 글로벌 fetch 사용 가능). */
   fetch?: typeof fetch;
   /** AbortSignal. */

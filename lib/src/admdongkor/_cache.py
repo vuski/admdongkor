@@ -235,6 +235,24 @@ def data_version() -> str | None:
     return None
 
 
+def manifest_versions() -> list[str] | None:
+    """캐시된 manifest 의 `versions` 배열. 없거나 형식이 이상하면 None.
+
+    manifest 는 import 시 `ensure_latest()` 가 원격에서 받아 갱신하므로, 패키지를
+    재배포하지 않아도 dist/data/ 에 추가된 새 시점까지 들어 있다. 디스크만 읽고
+    네트워크는 쓰지 않는다. `versions` 필드는 데이터 버전 2026.07 부터 있다.
+    """
+    m = _read_json_safe(_manifest_cache_path())
+    if m is None:
+        return None
+    v = m.get("versions")
+    if not isinstance(v, list) or not v:
+        return None
+    if not all(isinstance(k, str) and len(k) == 8 and k.isdigit() for k in v):
+        return None
+    return sorted(v)
+
+
 def changelog() -> list[dict[str, str]]:
     """data 수정 이력. manifest 의 `history` 필드.
 

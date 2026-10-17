@@ -3,16 +3,28 @@
 import pytest
 
 import admdongkor as adk
+from admdongkor import _cache
+from admdongkor._versions import VERSIONS
+
+
+@pytest.fixture(autouse=True)
+def _no_manifest(monkeypatch):
+    """사용자 캐시의 manifest 를 격리 — 결과가 패키지 스냅샷 VERSIONS 만으로 정해지게.
+
+    get_list()/versions() 는 캐시된 manifest 의 versions 를 합치므로, 격리하지 않으면
+    테스트 결과가 실행 환경의 캐시 상태에 따라 달라진다.
+    """
+    monkeypatch.setattr(_cache, "manifest_versions", lambda: None)
 
 
 class TestGetList:
     def test_no_arg(self):
-        assert len(adk.get_list()) == 62
+        assert adk.get_list() == VERSIONS
 
     def test_returns_list_copy(self):
         a = adk.get_list()
         a.append("fake")
-        assert len(adk.get_list()) == 62  # 원본 건드리지 않음
+        assert len(adk.get_list()) == len(VERSIONS)  # 원본 건드리지 않음
 
     def test_year_2025(self):
         assert adk.get_list(year=2025) == [

@@ -20,7 +20,7 @@ Node 18+ 필요 (글로벌 `fetch` 사용). 브라우저에서도 동작.
 import * as adk from "admdongkor";
 
 // 시점 목록
-adk.versions(); // ["19751231", ..., "20260401"]
+adk.versions(); // ["19751231", ..., "20261001"]
 adk.versions(2025); // 2025 년만
 
 // 지도 호출 — GeoJSON FeatureCollection (EPSG:4326)
@@ -63,10 +63,21 @@ const m = await adk.matchAdm({
 **반환**: `string[]` — 오름차순 정렬된 `YYYYMMDD` 문자열.
 
 ```ts
-versions(); // ["19751231", ..., "20260401"]
+versions(); // ["19751231", ..., "20261001"]
 versions(2025); // ["20250101", "20250401", "20250701", "20251001", "20251231"]
 versions(1999); // [] — 해당 연도 데이터 없음
 ```
+
+`versions()` 는 **패키지를 배포한 시점의 스냅샷**이다. 그 뒤 새 시점이 추가되면
+`versionsAsync()` 로 최신 목록을 받는다 (원격 `manifest.json` 기준, 실패하면 스냅샷).
+
+```ts
+await versionsAsync(); // 스냅샷 + 배포 이후 추가된 시점
+await versionsAsync(2026);
+```
+
+`get` / `matchAdm` / `compare` 는 스냅샷에 없는 키를 받으면 manifest 를 확인하므로,
+**새 시점을 쓰려고 패키지를 업데이트할 필요는 없다** (0.5.2+).
 
 ---
 
@@ -76,10 +87,11 @@ versions(1999); // [] — 해당 연도 데이터 없음
 
 | 인자              | 타입                       | 기본           | 설명                                                       |
 | ----------------- | -------------------------- | -------------- | ---------------------------------------------------------- |
-| `key`             | `string`                   | —              | `versions()` 목록 중 하나                                  |
+| `key`             | `string`                   | —              | `versionsAsync()` 목록 중 하나                             |
 | `level`           | `"emd" \| "sgg" \| "sido"` | `"emd"`        |                                                            |
 | `options.detail`  | `boolean`                  | `false`        | `false` = light (단순화, 빠름). `true` = 원본 (emd ~11MB). |
 | `options.baseUrl` | `string`                   | GitHub raw     | CDN / 자체 호스팅으로 교체 가능                            |
+| `options.indexBaseUrl` | `string`              | GitHub dist/data | 새 시점 검증용 `manifest.json` 위치 (자체 호스팅용)      |
 | `options.fetch`   | `typeof fetch`             | 글로벌 `fetch` | 테스트·프록시 주입용                                       |
 | `options.signal`  | `AbortSignal`              | —              | 취소                                                       |
 
