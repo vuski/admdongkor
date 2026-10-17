@@ -1,8 +1,8 @@
 {
-  "data_version": "2026.08.26",
+  "data_version": "2026.10.17",
   "schema_version": "v3",
   "min_lib_version": "0.6.0",
-  "created_at": "2026-08-26T12:45:54Z",
+  "created_at": "2026-10-17T10:05:36Z",
   "versions": [
     "19751231",
     "19801231",
@@ -66,9 +66,14 @@
     "20251231",
     "20260201",
     "20260401",
-    "20260701"
+    "20260701",
+    "20261001"
   ],
   "history": [
+    {
+      "version": "2026.10.17",
+      "changes": "20261001 추가: 세종 반곡동 분할(집현동 신설), 대구 달성군 구지면→구지읍 승격"
+    },
     {
       "version": "2026.08.26",
       "changes": "울릉도 위치 보정(그룹별 평행이동) + 독도 전 시점 추가"
@@ -88,40 +93,40 @@
   ],
   "files": {
     "_index.parquet": {
-      "size": 1859367,
-      "sha256": "dacbd5b5bd3e1c50a27972285ced3e62692bd253edbf439a57ad3a6f85ad9bd0"
+      "size": 1886745,
+      "sha256": "64c8413a24804515f38430530ba2efc8e01734c4e6c7d414879469a144855402"
     },
     "_index_v3.parquet": {
-      "size": 1859367,
-      "sha256": "dacbd5b5bd3e1c50a27972285ced3e62692bd253edbf439a57ad3a6f85ad9bd0"
+      "size": 1886745,
+      "sha256": "64c8413a24804515f38430530ba2efc8e01734c4e6c7d414879469a144855402"
     },
     "_offices.parquet": {
       "size": 22216,
       "sha256": "81ba2176c70824435410242e6d3fe8ef09e1584188b08b445cd4603bed35631e"
     },
     "timeline_v3_sido.parquet": {
-      "size": 10680,
-      "sha256": "f3aecf23c5484257fdc450d483c657243eee2113253058b54ea9d069a904b548"
+      "size": 10690,
+      "sha256": "ced31bde4f931e8d51ec50b30ebddd11abe78adc2fe02d913e3d05280ea12f6b"
     },
     "timeline_v3_sgg.parquet": {
-      "size": 105038,
-      "sha256": "a93205c7913b80b95a9cdcbddc2026e699e95e2e85df5f9cd011e7734079fc2f"
+      "size": 105122,
+      "sha256": "4e5cceaf908852e8b51b5c166ff8a8a89a031fbdbac776871440569067871f77"
     },
     "timeline_v3_emd.parquet": {
-      "size": 1561696,
-      "sha256": "ea72b9d9c9a0c87281679817af2ca550370ab4ac93a776a59ab3a6eddb567a70"
+      "size": 1560292,
+      "sha256": "dee44604a6217aec6b042287d72c43e5781d87e38aba922b0f30ec2c29248083"
     },
     "shape_pairs_v3_sido.parquet": {
-      "size": 14326,
-      "sha256": "2edc407042bab4fbc3d30646e21e23e402dccb2ec031d1ea68d9d39bc5155d19"
+      "size": 14319,
+      "sha256": "474f722871dea72d3beda02082ed823946a0e71828bc97c1085932fb4ecb4a91"
     },
     "shape_pairs_v3_sgg.parquet": {
-      "size": 93182,
-      "sha256": "a2338ee3ce3c91f97c60b1f061c75acff4d552559c522339b2a901e92a3a3da0"
+      "size": 93163,
+      "sha256": "f2735150317225b79a9150a017676251d686d4cfcdc20ca457a18968d4606fff"
     },
     "shape_pairs_v3_emd.parquet": {
-      "size": 2164834,
-      "sha256": "74a1c45e457b9d077e4432e2a46be277e8765fdcfe3948ccaaed02a6e38167d0"
+      "size": 2165998,
+      "sha256": "111abcb0c836406c036ef22770a7d787b51e878d2df7cb876aea7eb1dca1b0f7"
     }
   }
 }

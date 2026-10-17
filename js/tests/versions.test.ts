@@ -15,9 +15,9 @@ describe("versions()", () => {
   it("returns all versions when called with no args", () => {
     const all = versions();
     expect(all.length).toBe(VERSIONS.length);
-    expect(all.length).toBe(63);
+    expect(all.length).toBe(64);
     expect(all[0]).toBe("19751231");
-    expect(all.at(-1)).toBe("20260701");
+    expect(all.at(-1)).toBe("20261001");
   });
 
   it("filters by year", () => {
