@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-sqljs-wasm.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-sqljs-wasm.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -30,7 +32,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-map-gl": "^8.1.0",
-    "sql.js": "^1.14.1",
+    "sql.js": "^1.16.0",
     "tailwind-merge": "^3.5.0",
     "zustand": "^5.0.11"
   },
